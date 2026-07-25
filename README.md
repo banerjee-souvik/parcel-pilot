@@ -8,11 +8,12 @@ Full design context: [`decisions.md`](./decisions.md) (why every technical choic
 [`design.md`](./design.md) (product/UX reasoning), [`tech-design.md`](./tech-design.md)
 (implementation spec).
 
-**Status:** early build — chat loop, guardrails, and tracing are working end-to-end locally.
-Structured UI cards, stream resumption, the confirm/cancel HTTP endpoints, and the evals suite are
-still in progress. This README will get a proper setup/deploy section once the app is deployable.
+**Status:** chat loop, guardrails, tracing, the structured UI (timeline/date-picker/confirm/success
+cards), the confirm/cancel endpoints, and the landing page are working end-to-end locally. Stream
+resumption and the evals suite are still in progress. This README will get a proper deploy section
+once the app is deployed.
 
-## Local development (current state)
+## Local development
 
 ```bash
 docker compose up -d        # Postgres + Redis
@@ -22,8 +23,9 @@ yarn db:setup                # push schema + seed 5 demo shipments
 yarn dev
 ```
 
-Then open `/chat`. Demo tracking numbers (verification code `7742` for all of them) are in
-`lib/db/seed.ts`.
+Open `/` for the landing page (with copyable demo tracking numbers) or `/chat` directly.
+Verification code for every seeded shipment is `7742`; the shipments themselves are in
+`src/lib/db/seed.ts`.
 
 ## Stack
 
