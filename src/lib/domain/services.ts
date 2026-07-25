@@ -11,6 +11,7 @@ import {
   Result,
   ShipmentDetail,
   PublicShipmentSummary,
+  ProposalSummary,
 } from "./types";
 
 // The only module that writes to shipments/actions. Tools and API routes call these functions;
@@ -116,6 +117,7 @@ export async function getShipmentDetail(chatId: string, trackingNumber: string):
 }
 
 const RESCHEDULE_WINDOWS = ["09:00-13:00", "13:00-18:00"] as const;
+const WINDOW_LABEL: Record<string, string> = { "09:00-13:00": "9 AM – 1 PM", "13:00-18:00": "1 PM – 6 PM" };
 
 export async function getRescheduleOptions(
   chatId: string,
@@ -166,10 +168,14 @@ type ProposePayload =
   | { kind: "update_instructions"; trackingNumber: string; instructions: string }
   | { kind: "file_claim"; trackingNumber: string; type: "damaged" | "missing"; description: string };
 
-export async function proposeAction(
-  chatId: string,
-  payload: ProposePayload
-): Promise<Result<{ proposalId: string; summary: string }>> {
+const CONFIRM_NOTE = "Nothing changes until you confirm. This can be undone until the parcel leaves the hub.";
+const CLAIM_NOTE = "A reference number is issued as soon as you confirm — no changes happen before that.";
+
+function friendlyDate(value: Date | string): string {
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
+}
+
+export async function proposeAction(chatId: string, payload: ProposePayload): Promise<Result<ProposalSummary>> {
   const chat = await ensureChat(chatId);
   const disclose = guardrails.canDisclose(chat, payload.trackingNumber);
   if (!disclose.ok) return disclose;
@@ -178,30 +184,59 @@ export async function proposeAction(
   if (!shipment) {
     return refuse("SHIPMENT_NOT_FOUND", `I couldn't find a shipment with tracking number ${payload.trackingNumber}.`);
   }
+
   let summary: string;
+  let title: string;
+  let rows: ProposalSummary["rows"];
+  let note = CONFIRM_NOTE;
+
   switch (payload.kind) {
     case "reschedule": {
       const check = guardrails.canReschedule(shipment, new Date(payload.date), new Date());
       if (!check.ok) return check;
       summary = `Reschedule ${payload.trackingNumber} to ${payload.date}, ${payload.window}`;
+      title = "Confirm reschedule";
+      rows = [
+        { label: "Shipment", value: payload.trackingNumber },
+        { label: "Current ETA", value: shipment.eta ? friendlyDate(shipment.eta) : "Not yet estimated" },
+        { label: "New delivery", value: `${friendlyDate(payload.date)} · ${WINDOW_LABEL[payload.window] ?? payload.window}` },
+      ];
       break;
     }
     case "change_address": {
       const check = guardrails.canChangeAddress(shipment);
       if (!check.ok) return check;
       summary = `Change delivery address for ${payload.trackingNumber} to ${payload.addressLine}, ${payload.city}`;
+      title = "Confirm address change";
+      rows = [
+        { label: "Shipment", value: payload.trackingNumber },
+        { label: "Current address", value: `${shipment.addressLine}, ${shipment.city}` },
+        { label: "New address", value: `${payload.addressLine}, ${payload.city}` },
+      ];
       break;
     }
     case "update_instructions": {
       const check = guardrails.canUpdateInstructions(shipment);
       if (!check.ok) return check;
       summary = `Update delivery instructions for ${payload.trackingNumber}`;
+      title = "Confirm instructions update";
+      rows = [
+        { label: "Shipment", value: payload.trackingNumber },
+        { label: "New instructions", value: payload.instructions },
+      ];
       break;
     }
     case "file_claim": {
       const check = guardrails.canFileClaim(shipment);
       if (!check.ok) return check;
       summary = `File a ${payload.type} claim for ${payload.trackingNumber}`;
+      title = "Confirm claim";
+      rows = [
+        { label: "Shipment", value: payload.trackingNumber },
+        { label: "Type", value: payload.type === "damaged" ? "Damaged" : "Missing item" },
+        { label: "Description", value: payload.description },
+      ];
+      note = CLAIM_NOTE;
       break;
     }
   }
@@ -216,7 +251,7 @@ export async function proposeAction(
     state: "proposed",
   });
 
-  return ok({ proposalId, summary });
+  return ok({ proposalId, summary, title, rows, note });
 }
 
 // Transaction-scoped client type, inferred from db.transaction's own callback signature.

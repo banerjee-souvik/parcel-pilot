@@ -72,3 +72,13 @@ export type Receipt = {
   trackingNumber: string;
   summary: string;
 };
+
+export type ProposalRow = { label: string; value: string };
+
+export type ProposalSummary = {
+  proposalId: string;
+  summary: string; // plain-English sentence, for the model to reference in prose
+  title: string; // card header, e.g. "Confirm reschedule"
+  rows: ProposalRow[]; // structured before/after detail for the confirm card
+  note: string; // reassurance line ("nothing changes until you confirm")
+};

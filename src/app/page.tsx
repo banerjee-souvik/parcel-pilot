@@ -1,65 +1,183 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Activity, CloudRain, Globe2, Package, PackageCheck, RefreshCw, ShieldCheck, Sparkles, TriangleAlert, Truck } from "lucide-react";
+import { db } from "@/lib/db";
+import { shipments } from "@/lib/db/schema";
+import { cn } from "@/lib/utils";
+import { DemoCard } from "@/components/landing/demo-card";
 
-export default function Home() {
+const TONE_ICON = { warn: "text-warn", success: "text-success", danger: "text-danger" };
+
+const DEMO_COPY: Record<
+  string,
+  { icon: typeof CloudRain; tone: "warn" | "success" | "danger"; headline: string; description: string }
+> = {
+  "SS-4417-DEMO": {
+    icon: CloudRain,
+    tone: "warn",
+    headline: "Weather delay",
+    description: "Held at Nagpur hub, ETA slipped 2 days. Try rescheduling it.",
+  },
+  "SS-9021-DEMO": {
+    icon: Truck,
+    tone: "success",
+    headline: "Out for delivery",
+    description: "On a courier's van. Try changing the address — the agent must refuse.",
+  },
+  "SS-7130-DEMO": {
+    icon: PackageCheck,
+    tone: "danger",
+    headline: "Delivered",
+    description: "Arrived safely. Try reporting damage and watch a claim get filed.",
+  },
+  "SS-2288-DEMO": {
+    icon: Globe2,
+    tone: "warn",
+    headline: "Customs hold",
+    description: "No ETA yet. Try rescheduling it — the agent must refuse until it clears.",
+  },
+  "SS-5560-DEMO": {
+    icon: TriangleAlert,
+    tone: "warn",
+    headline: "Delivery attempt failed",
+    description: "Recipient was unavailable — already auto-rescheduled. Ask what happened.",
+  },
+};
+
+export default async function LandingPage() {
+  const seeded = await db.select({ trackingNumber: shipments.trackingNumber }).from(shipments);
+  const cards = seeded.map((s) => s.trackingNumber).filter((tn) => tn in DEMO_COPY);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="flex w-full flex-col bg-bg">
+      <nav className="flex items-center justify-between gap-3 px-20 py-[18px]">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-accent">
+            <Package className="h-[18px] w-[18px] text-white" />
+          </div>
+          <span className="text-base font-semibold text-text-primary">Parcel Pilot</span>
+        </div>
+        <div className="flex items-center gap-5">
+          <Link href="/traces" className="text-sm font-medium text-text-secondary hover:text-text-primary">
+            Traces
+          </Link>
+          <a
+            href="https://github.com"
+            className="text-sm font-medium text-text-secondary hover:text-text-primary"
+          >
+            GitHub
+          </a>
+          <Link href="/chat" className="rounded-[9px] bg-accent px-[18px] py-2.5 text-sm font-semibold text-white">
+            Open chat
+          </Link>
+        </div>
+      </nav>
+
+      <section className="flex items-center gap-20 px-20 py-16 pb-[72px]">
+        <div className="flex w-full flex-col gap-5">
+          <div className="flex w-fit items-center gap-1.5 rounded-full bg-accent-soft px-3 py-[5px]">
+            <Sparkles className="h-[13px] w-[13px] text-accent" />
+            <span className="text-xs font-semibold text-accent">SwiftShip delivery agent</span>
+          </div>
+          <h1 className="text-[52px] font-bold leading-[1.1] text-text-primary">
+            Your delivery, sorted in one conversation.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+          <p className="max-w-[520px] text-[17px] leading-relaxed text-text-secondary">
+            Track a parcel, move a delivery, or file a damage claim by just asking. Every change is confirmed by
+            you before it happens — and never happens twice.
+          </p>
+          <div className="flex gap-3">
+            <Link href="/chat" className="rounded-[10px] bg-accent px-6 py-[13px] text-[15px] font-semibold text-white">
+              Try the demo
+            </Link>
+            <Link
+              href="/traces"
+              className="flex items-center gap-2 rounded-[10px] border border-border px-6 py-[13px] text-[15px] font-medium text-text-primary"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              <Activity className="h-4 w-4" />
+              See agent traces
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex w-[420px] shrink-0 flex-col gap-2.5 rounded-[18px] border border-border bg-bg-subtle p-5">
+          <div className="flex justify-end">
+            <div className="rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-md bg-accent px-3.5 py-2.5 text-[13px] text-white">
+              My parcel says delayed — why?
+            </div>
+          </div>
+          <div className="pr-8">
+            <div className="rounded-tl-2xl rounded-tr-2xl rounded-br-2xl rounded-bl-md bg-bg px-3.5 py-2.5 text-[13px] leading-relaxed text-text-primary">
+              Heavy rain held it at the Nagpur hub. New ETA is Saturday. Want a different day?
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {["Reschedule", "Leave instructions", "It's fine"].map((chip) => (
+              <span key={chip} className="rounded-full border border-border bg-bg px-3 py-1.5 text-xs font-medium text-accent">
+                {chip}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-5 bg-bg-subtle px-20 py-12 pb-14">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-2xl font-semibold text-text-primary">Grab a demo tracking number</h2>
+          <p className="text-[15px] text-text-secondary">
+            Seeded shipments, each in a different (messy) state. Verification code for all of them: 7742.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {cards.map((trackingNumber) => {
+            const { icon: Icon, tone, headline, description } = DEMO_COPY[trackingNumber];
+            return (
+              <DemoCard
+                key={trackingNumber}
+                trackingNumber={trackingNumber}
+                icon={<Icon className={cn("h-5 w-5", TONE_ICON[tone])} />}
+                tone={tone}
+                headline={headline}
+                description={description}
+              />
+            );
+          })}
         </div>
-      </main>
+      </section>
+
+      <section className="grid grid-cols-1 gap-8 px-20 py-12 sm:grid-cols-3">
+        {[
+          {
+            icon: ShieldCheck,
+            title: "You approve every change",
+            description: "The agent proposes; nothing executes until you tap confirm. Never twice, even on a double-tap.",
+          },
+          {
+            icon: RefreshCw,
+            title: "Survives bad connections",
+            description: "Refresh mid-answer and the reply keeps streaming from where it stopped.",
+          },
+          {
+            icon: Activity,
+            title: "Fully inspectable",
+            description: "Every model step and tool call is traced — open /traces and audit any conversation.",
+          },
+        ].map(({ icon: Icon, title, description }) => (
+          <div key={title} className="flex flex-col gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft">
+              <Icon className="h-5 w-5 text-accent" />
+            </div>
+            <span className="text-base font-semibold text-text-primary">{title}</span>
+            <p className="text-sm leading-relaxed text-text-secondary">{description}</p>
+          </div>
+        ))}
+      </section>
+
+      <footer className="flex items-center justify-between border-t border-border px-20 py-5">
+        <span className="text-[13px] text-text-secondary">
+          Parcel Pilot — a take-home build. Fictional carrier, real agent.
+        </span>
+        <span className="text-[13px] font-medium text-text-secondary">decisions.md · design.md · GitHub</span>
+      </footer>
     </div>
   );
 }
