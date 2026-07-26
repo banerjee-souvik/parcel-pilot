@@ -5,6 +5,25 @@ import { ActionState, ok, refuse, Result, ShipmentStatus } from "./types";
 
 const PROPOSAL_TTL_MS = 15 * 60 * 1000;
 
+// Calendar-only dates ("2026-08-02") must never round-trip through UTC — `new Date("2026-08-02")`
+// parses as UTC midnight per spec, and `.toISOString().slice(0,10)` serializes in UTC, either of
+// which can silently shift the calendar day (and therefore the day-of-week) by one once the server's
+// local timezone differs from UTC. Confirmed for real: running locally in IST just after local
+// midnight produced a "Sunday" rejection for a date every local calculation agreed was Monday — the
+// UTC string crossed the day boundary the local Date object hadn't. These two helpers are the only
+// sanctioned way to move a reschedule date between a Date and a string; local getters only, never UTC.
+export function parseDateOnly(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function formatDateOnly(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function canDisclose(chat: { verifiedTrackingNumbers: string[] }, trackingNumber: string): Result<true> {
   if (!chat.verifiedTrackingNumbers.includes(trackingNumber)) {
     return refuse("NOT_VERIFIED", "I need to verify your identity before sharing shipment details. What's the last 4 digits of the phone number on this order?");

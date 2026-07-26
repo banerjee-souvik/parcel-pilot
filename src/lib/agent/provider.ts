@@ -26,3 +26,18 @@ export function getModelId(): string {
   if (process.env.GROQ_API_KEY) return GROQ_MODEL;
   throw new MissingProviderError();
 }
+
+// EVAL_MODEL lets the eval suite pin a specific provider ("google" | "groq") instead of whichever
+// key happens to be configured — useful for reproducing a scenario against a specific model, or for
+// keeping evals off whichever provider is quota-constrained that day. Falls back to getModel()/Id().
+export function getEvalModel() {
+  if (process.env.EVAL_MODEL === "google") return google(GOOGLE_MODEL);
+  if (process.env.EVAL_MODEL === "groq") return groq(GROQ_MODEL);
+  return getModel();
+}
+
+export function getEvalModelId(): string {
+  if (process.env.EVAL_MODEL === "google") return GOOGLE_MODEL;
+  if (process.env.EVAL_MODEL === "groq") return GROQ_MODEL;
+  return getModelId();
+}

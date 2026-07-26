@@ -1,10 +1,10 @@
-import { eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import { traceSpans, traces } from "./db/schema";
+import { chats, traceSpans, traces } from "./db/schema";
 
 type SpanKind = "model_call" | "tool_call" | "guardrail" | "error";
-type SpanOutcome = "ok" | "refused" | "proposal" | "error";
+type SpanOutcome = "ok" | "refused" | "proposal" | "executed" | "cancelled" | "error";
 
 type BufferedSpan = {
   id: string;
@@ -110,7 +110,12 @@ export function createTracer({ chatId, model }: { chatId: string; model: string 
     });
   }
 
-  async function finalize(status: "completed" | "refusal" | "error") {
+  // "completed" from the caller just means "the stream didn't crash" — it can't see whether a
+  // guardrail refused something mid-run, only the buffered spans know that. Derive the real status
+  // from them so the trace list's refusal (amber) dot isn't permanently unreachable.
+  async function finalize(callerStatus: "completed" | "error") {
+    const status: "completed" | "refusal" | "error" =
+      callerStatus === "error" ? "error" : spans.some((s) => s.outcome === "refused") ? "refusal" : "completed";
     if (spans.length > 0) {
       await db.insert(traceSpans).values(
         spans.map((s) => ({
@@ -139,4 +144,88 @@ export function createTracer({ chatId, model }: { chatId: string; model: string 
   }
 
   return { traceId, init, recordStep, toolStart, toolEnd, guardrailRefusal, finalize };
+}
+
+// A single deterministic action (confirm/cancel) doesn't fit the streaming-oriented Tracer above —
+// there's no model call, no multi-step lifecycle, just one thing that happened. Record it as its
+// own tiny one-span trace instead of overloading createTracer for a shape it wasn't built for.
+export async function recordActionTrace({
+  chatId,
+  name,
+  input,
+  output,
+  durationMs,
+  outcome,
+  status,
+}: {
+  chatId: string;
+  name: string;
+  input: unknown;
+  output: unknown;
+  durationMs: number;
+  outcome: SpanOutcome;
+  status: "completed" | "error";
+}) {
+  const traceId = `t_${nanoid(12)}`;
+  await db.insert(traces).values({ id: traceId, chatId, model: "system", status, durationMs });
+  await db.insert(traceSpans).values({
+    id: `span_${nanoid(12)}`,
+    traceId,
+    seq: 0,
+    kind: "tool_call",
+    name,
+    input,
+    output,
+    durationMs,
+    tokens: null,
+    outcome,
+    startedAt: new Date(),
+  });
+}
+
+// --- Reads, for the /traces UI. Kept here alongside the writer since this file owns the
+// traces/trace_spans tables end to end — services.ts owns shipments/actions/chats/messages. ---
+
+export async function listTraces() {
+  const rows = await db
+    .select({
+      id: traces.id,
+      chatId: traces.chatId,
+      chatTitle: chats.title,
+      model: traces.model,
+      status: traces.status,
+      totalTokens: traces.totalTokens,
+      durationMs: traces.durationMs,
+      createdAt: traces.createdAt,
+    })
+    .from(traces)
+    .leftJoin(chats, eq(chats.id, traces.chatId))
+    .orderBy(desc(traces.createdAt));
+
+  const counts = await db.select({ traceId: traceSpans.traceId, n: count() }).from(traceSpans).groupBy(traceSpans.traceId);
+  const countByTraceId = new Map(counts.map((c) => [c.traceId, c.n]));
+
+  return rows.map((r) => ({ ...r, stepCount: countByTraceId.get(r.id) ?? 0 }));
+}
+
+export async function loadTraceDetail(traceId: string) {
+  const [trace] = await db
+    .select({
+      id: traces.id,
+      chatId: traces.chatId,
+      chatTitle: chats.title,
+      model: traces.model,
+      status: traces.status,
+      totalTokens: traces.totalTokens,
+      durationMs: traces.durationMs,
+      createdAt: traces.createdAt,
+    })
+    .from(traces)
+    .leftJoin(chats, eq(chats.id, traces.chatId))
+    .where(eq(traces.id, traceId))
+    .limit(1);
+  if (!trace) return null;
+
+  const spans = await db.select().from(traceSpans).where(eq(traceSpans.traceId, traceId)).orderBy(traceSpans.seq);
+  return { trace, spans };
 }

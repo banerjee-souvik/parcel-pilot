@@ -13,7 +13,9 @@ export const maxDuration = 60;
 // the AI SDK swallows them internally and emits a generic "error" chunk instead. This onError hook is
 // the only place we get to shape what the client actually sees, so we JSON-encode a typed marker the
 // client can parse for the rate-limit banner, falling back to plain text for anything unrecognized.
-function describeError(error: unknown): string {
+// Exported so the rate-limit-degradation eval can verify this exact function (not a reimplementation
+// of it) classifies a mock 429 correctly.
+export function describeError(error: unknown): string {
   if (APICallError.isInstance(error) && error.statusCode === 429) {
     return JSON.stringify({ code: "RATE_LIMITED" });
   }
@@ -45,7 +47,15 @@ export async function POST(req: Request) {
   const tracer = createTracer({ chatId, model: modelId });
   await tracer.init();
 
-  const result = await buildAgentStream({ chatId, uiMessages: messages, tracer });
+  let result: Awaited<ReturnType<typeof buildAgentStream>>;
+  try {
+    result = await buildAgentStream({ chatId, uiMessages: messages, tracer });
+  } catch (err) {
+    // Anything thrown before the stream response even exists (e.g. history conversion) would
+    // otherwise leave this trace stuck at "running" forever — nothing downstream ever finalizes it.
+    await tracer.finalize("error");
+    throw err;
+  }
 
   return createUIMessageStreamResponse({
     stream: toUIMessageStream({

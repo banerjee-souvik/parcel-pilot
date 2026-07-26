@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { db } from "./index";
 import { actions, chats, messages, shipmentEvents, shipments, traceSpans, traces } from "./schema";
 
@@ -24,7 +25,9 @@ function hoursAgo(now: Date, n: number): Date {
   return d;
 }
 
-async function main() {
+// Exported so the eval harness can reseed between scenarios without going through the CLI's
+// process.exit — importing this module must never have that side effect.
+export async function seedDatabase() {
   const now = new Date();
 
   // Delete in FK-safe order.
@@ -188,9 +191,15 @@ async function main() {
   console.log("Seeded 5 demo shipments + 1 demo chat/trace.");
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+// ESM-safe equivalent of `require.main === module`: only auto-run (and exit the process) when this
+// file is executed directly by tsx/node, never when imported (e.g. by the eval harness). Compares
+// via pathToFileURL rather than a hand-rolled "file://" + argv[1] string, which doesn't reliably
+// match on every OS/path shape (confirmed: the naive version silently never matched here).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seedDatabase()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}

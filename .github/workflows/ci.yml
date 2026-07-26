@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --immutable
+      - run: yarn lint
+      - run: yarn tsc --noEmit
+
+  unit:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: parcelpilot
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/parcelpilot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --immutable
+      # db:setup expects a real .env.local (matches local dev); write one here rather than making
+      # the script tolerate a missing file, which would silently mask a real local-dev setup error.
+      - run: echo "DATABASE_URL=${DATABASE_URL}" > .env.local
+      - run: yarn db:setup
+      - run: yarn test
+
+  evals:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: parcelpilot
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/parcelpilot
+      # Groq over Gemini for CI on purpose: Groq's free-tier daily quota (1,000 req/day) comfortably
+      # absorbs repeated CI runs; Gemini's (20 req/day) does not — decisions.md #4, #8, #10.
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      EVAL_MODEL: groq
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --immutable
+      - name: Check for GROQ_API_KEY secret
+        id: check-secret
+        run: |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "::warning::GROQ_API_KEY secret not set — skipping evals (this is expected on forks)."
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check-secret.outputs.has_key == 'true'
+        run: |
+          echo "DATABASE_URL=${DATABASE_URL}" > .env.local
+          echo "GROQ_API_KEY=${GROQ_API_KEY}" >> .env.local
+          echo "EVAL_MODEL=${EVAL_MODEL}" >> .env.local
+      - if: steps.check-secret.outputs.has_key == 'true'
+        run: yarn drizzle-kit push
+      - if: steps.check-secret.outputs.has_key == 'true'
+        run: yarn eval

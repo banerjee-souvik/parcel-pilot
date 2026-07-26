@@ -157,7 +157,7 @@ export async function getRescheduleOptions(
   while (dates.length < 7 && cursor.getTime() <= maxDate.getTime()) {
     if (cursor.getDay() !== 0) {
       const check = guardrails.canReschedule({ status: shipment.status }, cursor, now);
-      if (check.ok) dates.push(cursor.toISOString().slice(0, 10));
+      if (check.ok) dates.push(guardrails.formatDateOnly(cursor));
     }
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -177,7 +177,11 @@ const CONFIRM_NOTE = "Nothing changes until you confirm. This can be undone unti
 const CLAIM_NOTE = "A reference number is issued as soon as you confirm — no changes happen before that.";
 
 function friendlyDate(value: Date | string): string {
-  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
+  // A string here is always a calendar-only date ("2026-08-02") — parse it as a local calendar date
+  // (guardrails.parseDateOnly), never via `new Date(string)`, which parses as UTC midnight and can
+  // silently shift the displayed day. A Date object is a genuine timestamp already, format directly.
+  const date = typeof value === "string" ? guardrails.parseDateOnly(value) : value;
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(date);
 }
 
 export async function proposeAction(chatId: string, payload: ProposePayload): Promise<Result<ProposalSummary>> {
@@ -197,7 +201,7 @@ export async function proposeAction(chatId: string, payload: ProposePayload): Pr
 
   switch (payload.kind) {
     case "reschedule": {
-      const check = guardrails.canReschedule(shipment, new Date(payload.date), new Date());
+      const check = guardrails.canReschedule(shipment, guardrails.parseDateOnly(payload.date), new Date());
       if (!check.ok) return check;
       summary = `Reschedule ${payload.trackingNumber} to ${payload.date}, ${payload.window}`;
       title = "Confirm reschedule";
@@ -307,7 +311,7 @@ async function applyAction(payload: ProposePayload, tx: Tx): Promise<Receipt> {
 
   switch (payload.kind) {
     case "reschedule": {
-      const eta = new Date(`${payload.date}T00:00:00Z`);
+      const eta = guardrails.parseDateOnly(payload.date);
       await tx
         .update(shipments)
         .set({ eta, deliveryWindow: payload.window, updatedAt: new Date() })
