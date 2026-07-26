@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { UIMessage } from "ai";
 import { db } from "../db";
 import { actions, chats, messages, shipmentEvents, shipments } from "../db/schema";
 import * as guardrails from "./guardrails";
@@ -44,6 +45,10 @@ export async function loadChat(chatId: string) {
 
 export async function loadMessages(chatId: string) {
   return db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(messages.createdAt);
+}
+
+export function toUIMessage(row: { id: string; role: string; parts: unknown }): UIMessage {
+  return { id: row.id, role: row.role as UIMessage["role"], parts: row.parts as UIMessage["parts"] };
 }
 
 export async function persistMessage(chatId: string, message: { id: string; role: string; parts: unknown }) {

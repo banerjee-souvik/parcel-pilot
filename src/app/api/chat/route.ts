@@ -1,22 +1,36 @@
-import { createUIMessageStreamResponse, generateId, toUIMessageStream, type UIMessage } from "ai";
+import { APICallError, createUIMessageStreamResponse, generateId, toUIMessageStream, type UIMessage } from "ai";
 import { after } from "next/server";
+import { createResumableStreamContext } from "resumable-stream/ioredis";
 import { buildAgentStream } from "@/lib/agent/run";
 import { MissingProviderError, getModelId } from "@/lib/agent/provider";
 import * as services from "@/lib/domain/services";
+import { redisPublisher, redisSubscriber } from "@/lib/redis";
 import { createTracer } from "@/lib/tracing";
 
 export const maxDuration = 60;
+
+// Errors thrown mid-stream (rate limits, provider outages) don't reject buildAgentStream's promise —
+// the AI SDK swallows them internally and emits a generic "error" chunk instead. This onError hook is
+// the only place we get to shape what the client actually sees, so we JSON-encode a typed marker the
+// client can parse for the rate-limit banner, falling back to plain text for anything unrecognized.
+function describeError(error: unknown): string {
+  if (APICallError.isInstance(error) && error.statusCode === 429) {
+    return JSON.stringify({ code: "RATE_LIMITED" });
+  }
+  return JSON.stringify({ code: "UNKNOWN", message: "Something went wrong. Please try again." });
+}
 
 export async function POST(req: Request) {
   const { id: chatId, message }: { id: string; message: UIMessage } = await req.json();
 
   await services.ensureChat(chatId);
   const prior = await services.loadMessages(chatId);
-  const messages = [...prior.map(toUIMessage), message];
+  const messages = [...prior.map(services.toUIMessage), message];
 
   // Invariant: persist the user's message before calling the model, so a failed/rate-limited
   // call never loses their input. See tech-design.md §0 invariant 6.
   await services.persistMessage(chatId, { id: message.id, role: message.role, parts: message.parts });
+  await services.setActiveStream(chatId, null);
 
   let modelId: string;
   try {
@@ -38,19 +52,35 @@ export async function POST(req: Request) {
       stream: result.stream,
       originalMessages: messages,
       generateMessageId: generateId,
+      onError: describeError,
       onEnd: ({ messages: finalMessages }) => {
         after(async () => {
           const last = finalMessages.at(-1);
           if (last && last.role === "assistant") {
             await services.persistMessage(chatId, { id: last.id, role: last.role, parts: last.parts });
           }
+          await services.setActiveStream(chatId, null);
           await tracer.finalize("completed");
         });
       },
     }),
+    async consumeSseStream({ stream }) {
+      // Graceful degradation covers two distinct cases: REDIS_URL unset (redisPublisher/Subscriber
+      // are null, skip immediately), and REDIS_URL set but Redis unreachable (caught here so a down
+      // Redis degrades to plain streaming instead of failing the request).
+      if (!redisPublisher || !redisSubscriber) return;
+      try {
+        const streamId = generateId();
+        const streamContext = createResumableStreamContext({
+          waitUntil: after,
+          publisher: redisPublisher,
+          subscriber: redisSubscriber,
+        });
+        await streamContext.createNewResumableStream(streamId, () => stream);
+        await services.setActiveStream(chatId, streamId);
+      } catch (err) {
+        console.warn("Resumable stream unavailable, continuing without resumption:", err);
+      }
+    },
   });
-}
-
-function toUIMessage(row: { id: string; role: string; parts: unknown }): UIMessage {
-  return { id: row.id, role: row.role as UIMessage["role"], parts: row.parts as UIMessage["parts"] };
 }

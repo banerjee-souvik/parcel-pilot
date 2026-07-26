@@ -53,7 +53,8 @@ parcel-pilot/
   src/
     app/
       page.tsx                    # landing (desktop-first)
-      chat/page.tsx               # chat UI (mobile-first)
+      chat/page.tsx               # redirects to a fresh /chat/[id] — no chat UI lives here
+      chat/[id]/page.tsx          # durable chat UI (mobile-first); loads history + willResume server-side
       traces/page.tsx             # runs list
       traces/[chatId]/page.tsx    # step tree
       api/chat/route.ts           # POST: agent loop
@@ -72,6 +73,7 @@ parcel-pilot/
       agent/tools.ts              # AI SDK tool defs
       agent/run.ts                # buildAgentStream(): shared by route + evals
       tracing.ts                  # trace recorder
+      redis.ts                    # shared ioredis publisher/subscriber singletons (see §11)
     components/                   # chat/*, traces/*, landing/*
   evals/
     harness.ts                    # runScenario(): drives agent loop headlessly
@@ -359,6 +361,28 @@ Concurrency guarantee comes from the atomic conditional UPDATE (row lock), not f
 
 This is the confirmed-current (2026-07-25) AI SDK v7 pattern for resumable streams, verified against live docs — follow it exactly, don't reconstruct from older v5/v6 tutorials which use deprecated instance methods (`result.toUIMessageStreamResponse()`).
 
+**Import from `resumable-stream/ioredis`, not the bare `resumable-stream` package.** The bare package's `createResumableStreamContext` (verified by reading the compiled JS, not just the types) does an unconditional top-level `require("redis")` to auto-create its default pub/sub clients — it crashes at *module load time* if the `redis` npm package isn't installed, regardless of whether you ever hit the auto-creation branch. We use `ioredis` (per §1), and `resumable-stream/ioredis` is the subpath built for that client instead.
+
+**Don't let `createResumableStreamContext` auto-create its Redis clients per request — pass a shared singleton pair instead.** Left to its defaults, `resumable-stream/ioredis` creates a fresh pair of `ioredis` clients on every call, from `REDIS_URL`. That's fine while Redis is up, but verified empirically (killed the Redis container mid-session): once Redis is unreachable, every request spins up a new client that fails to connect and logs raw `ioredis` stack traces — and since nothing ever tears these throwaway clients down, they pile up, each with its own independent background reconnect timer, so the log noise *worsens* over time rather than staying constant. Fix: build one `redisPublisher`/`redisSubscriber` pair as module-level singletons (`lib/redis.ts`) and pass them into every `createResumableStreamContext(...)` call — `CreateResumableStreamContextOptions.subscriber`/`.publisher` accept a raw `ioredis.Redis` instance directly (typed `Subscriber | Redis` / `Publisher | Redis`), no adapter import needed. One Redis connection handles many concurrent pub/sub channels fine, so sharing is not a bottleneck. Configure the singleton's `retryStrategy` to keep retrying indefinitely at a capped, slow interval (e.g. `Math.min(attempt * 500, 10000)`) rather than ever returning `null` — returning `null` stops reconnection permanently, which would leave resumability dead after a transient Redis blip until the process restarts. Set `maxRetriesPerRequest: 1` so an individual command fails fast (never blocks the chat response) instead of hanging. Wrap every `consumeSseStream`/GET-route call to the context in try/catch regardless — a slow reconnect window still means some requests hit a still-down connection.
+
+```ts
+// lib/redis.ts
+import { Redis } from "ioredis";
+
+function createClient(): Redis | null {
+  if (!process.env.REDIS_URL) return null;
+  const client = new Redis(process.env.REDIS_URL, {
+    retryStrategy: (attempt) => Math.min(attempt * 500, 10000), // keep trying, slowly — never null
+    maxRetriesPerRequest: 1,
+  });
+  client.on("error", () => {}); // suppress ioredis's default noisy unhandled-error logging
+  return client;
+}
+
+export const redisPublisher = createClient();
+export const redisSubscriber = createClient();
+```
+
 **Payload shape — lean, not full history.** The client sends only `{id: chatId, message: newestUIMessage}`, *not* the whole messages array. The server is the source of truth: it loads prior messages from `messages` (keyed by `chatId`), appends the new one, persists immediately, and only then calls the model. This is what makes invariant 6 (never lose a user message) trivial to satisfy — the write happens before anything that can fail.
 
 **POST /api/chat** (`export const maxDuration = 60`):
@@ -366,7 +390,8 @@ This is the confirmed-current (2026-07-25) AI SDK v7 pattern for resumable strea
 ```ts
 import { convertToModelMessages, createUIMessageStreamResponse, generateId, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { after } from "next/server";
-import { createResumableStreamContext } from "resumable-stream";
+import { createResumableStreamContext } from "resumable-stream/ioredis";
+import { redisPublisher, redisSubscriber } from "@/lib/redis";
 
 export async function POST(req: Request) {
   const { id: chatId, message }: { id: string; message: UIMessage } = await req.json();
@@ -391,11 +416,17 @@ export async function POST(req: Request) {
       },
     }),
     async consumeSseStream({ stream }) {
-      if (!process.env.REDIS_URL) return;       // graceful degradation: no Redis, no resumption, still works
-      const streamId = generateId();
-      const streamContext = createResumableStreamContext({ waitUntil: after });
-      await streamContext.createNewResumableStream(streamId, () => stream);
-      await db.update(chats).set({ activeStreamId: streamId }).where(eq(chats.id, chatId));
+      // Graceful degradation, two distinct cases: REDIS_URL unset (clients are null, skip), and
+      // REDIS_URL set but Redis unreachable (caught below — degrades to plain streaming either way).
+      if (!redisPublisher || !redisSubscriber) return;
+      try {
+        const streamId = generateId();
+        const streamContext = createResumableStreamContext({ waitUntil: after, publisher: redisPublisher, subscriber: redisSubscriber });
+        await streamContext.createNewResumableStream(streamId, () => stream);
+        await db.update(chats).set({ activeStreamId: streamId }).where(eq(chats.id, chatId));
+      } catch (err) {
+        console.warn("Resumable stream unavailable, continuing without resumption:", err);
+      }
     },
   });
 }
@@ -406,27 +437,35 @@ export async function POST(req: Request) {
 ```ts
 import { UI_MESSAGE_STREAM_HEADERS } from "ai";
 import { after } from "next/server";
-import { createResumableStreamContext } from "resumable-stream";
+import { createResumableStreamContext } from "resumable-stream/ioredis";
+import { redisPublisher, redisSubscriber } from "@/lib/redis";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const chat = await loadChat(id);
-  if (chat.activeStreamId == null) return new Response(null, { status: 204 });
+  if (!chat?.activeStreamId || !redisPublisher || !redisSubscriber) return new Response(null, { status: 204 });
 
-  const streamContext = createResumableStreamContext({ waitUntil: after });
-  return new Response(await streamContext.resumeExistingStream(chat.activeStreamId), {
-    headers: UI_MESSAGE_STREAM_HEADERS,
-  });
+  try {
+    const streamContext = createResumableStreamContext({ waitUntil: after, publisher: redisPublisher, subscriber: redisSubscriber });
+    const stream = await streamContext.resumeExistingStream(chat.activeStreamId);
+    if (!stream) return new Response(null, { status: 204 });
+    return new Response(stream, { headers: UI_MESSAGE_STREAM_HEADERS });
+  } catch (err) {
+    console.warn("Resumable stream unavailable:", err);
+    return new Response(null, { status: 204 });
+  }
 }
 ```
+
+**Routing: `/chat` redirects to `/chat/[id]`.** Resumption is meaningless without a chatId that survives a refresh — a fixed `/chat` route that mints a new id on every load would never have an active stream to reattach to. `/chat` (no id) is a thin server component that generates a fresh id and `redirect()`s to `/chat/c_${id}`; `/chat/[id]/page.tsx` is the durable, bookmarkable/refreshable URL. That page is a server component: it loads the chat row and its messages, converts DB rows to `UIMessage[]` (a `toUIMessage` helper — put it in `domain/services.ts`, it's needed by both this page and the POST route, don't duplicate it), and computes `willResume = chat.activeStreamId != null` **server-side** before ever rendering the client component. This is simpler and more reliable than trying to infer "did a real resume happen" from the client by inspecting the GET route's response status after the fact — the server already knows, from the same data, whether there's something to reattach to.
 
 **Client** (`useChat` from `@ai-sdk/react`):
 
 ```ts
-const { messages, sendMessage } = useChat({
+const { messages, sendMessage, error, clearError, regenerate } = useChat({
   id: chatId,
-  messages: initialFromDb,
-  resume: didResumeOnMount,      // boolean; true when this page load should attempt to reattach
+  messages: initialMessages,     // loaded server-side, passed down as a prop
+  resume: willResume,            // also server-side, same source of truth
   transport: new DefaultChatTransport({
     prepareSendMessagesRequest: ({ id, messages }) => ({
       body: { id, message: messages.at(-1) },   // send only the newest message — see payload shape note above
@@ -435,11 +474,11 @@ const { messages, sendMessage } = useChat({
 });
 ```
 
-On mount with `resume: true`, the SDK automatically fires the GET route to reattach to an in-flight stream. Show the "Reconnected — picked up where you left off" pill (mock "Chat / 4") when the GET actually returned 200 (a real resume), not on the 204 no-op case — track this with a local flag set from the GET response status.
+On mount with `resume: true`, the SDK automatically fires the GET route to reattach to an in-flight stream. Show the "Reconnected — picked up where you left off" pill (mock "Chat / 4") whenever `willResume` was true, and hide it once that resumed reply finishes (`status === "ready"` and an assistant message exists) or the user sends something new — compute this directly from existing state each render (`willResume && !dismissed && !resumedReplyDone`), don't reach for a `useEffect` + extra state just to mirror a value you can derive on the spot (the ESLint `react-hooks/set-state-in-effect` rule will flag exactly this if you try).
 
 **Crash-truth rule:** if the server dies between proposal creation and stream end, on next load the chat re-hydrates from `messages` + `actions`; a `proposed` action with no receipt renders the ConfirmCard again from the persisted tool part — still valid, still confirmable, and never auto-executed. This is the "interrupted tool call reports truthfully" story.
 
-**Rate limits / provider errors:** catch in route; map to typed SSE error part / JSON `{error: {code: "RATE_LIMITED", retryAfterMs}}`. Client: exponential backoff auto-retry (max 3), amber banner with countdown ("High demand… Your message is saved."), then a manual retry button. Zod tool-arg failures are NOT user errors: AI SDK feeds them back to the model (`experimental_repairToolCall` optional; default retry loop is fine) — trace them as spans with outcome `error`.
+**Rate limits / provider errors.** Errors thrown mid-generation (a 429, a provider outage) don't reject `buildAgentStream`'s promise — the AI SDK catches them internally and emits a plain `{type: "error", errorText: "An error occurred."}` chunk instead (verified by triggering a real Gemini free-tier 429 and reading the actual SSE output). The only hook that lets you shape what the client sees is `toUIMessageStream`'s `onError: (error: unknown) => string` — without it, every failure looks identical to the client. Detect the rate-limit case with `APICallError.isInstance(error) && error.statusCode === 429` (both re-exported from `'ai'`) and return a small JSON-encoded marker (`{code: "RATE_LIMITED"}`) instead of a display string; the client's `useChat().error.message` receives that string verbatim (confirmed by reading the SDK's chunk-processing code: `case "error": onError?.(new Error(chunk.errorText))`), so parse it with `JSON.parse` and fall back to a generic message if parsing fails. On the client, a `RATE_LIMITED` code shows the amber banner with a countdown (~15s is plenty — don't try to parse an exact retry-after out of the provider's error body, its shape is provider-specific and would silently break switching from Gemini to Groq); when the countdown hits zero, call `clearError()` then `regenerate()` to retry the same turn automatically. Zod tool-arg failures are NOT user errors: AI SDK feeds them back to the model (`experimental_repairToolCall` optional; default retry loop is fine) — trace them as spans with outcome `error`.
 
 ---
 

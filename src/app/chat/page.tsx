@@ -1,9 +1,9 @@
 import { nanoid } from "nanoid";
-import { ChatClient } from "@/components/chat/chat-client";
+import { redirect } from "next/navigation";
 
-// A fresh chat id per page load, generated server-side and passed down as a prop so the client
-// component hydrates with a stable value instead of generating its own (which would mismatch SSR).
-export default function ChatPage() {
-  const chatId = `c_${nanoid(12)}`;
-  return <ChatClient chatId={chatId} />;
+// /chat always starts a fresh conversation and hands off to /chat/[id], which is the durable,
+// refreshable URL. Without this redirect, refreshing /chat would silently start a new chat every
+// time — making stream resumption untestable, since there'd never be the same chatId twice.
+export default function NewChatPage() {
+  redirect(`/chat/c_${nanoid(12)}`);
 }
