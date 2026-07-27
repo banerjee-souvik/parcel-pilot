@@ -41,7 +41,7 @@ export function DatePickerCard({
   }
 
   return (
-    <div className="flex w-full flex-col gap-2">
+    <div role="group" aria-label="Choose a reschedule date and time window" className="flex w-full flex-col gap-2">
       <div className="flex gap-2">
         {dates.slice(0, 4).map((date) => {
           const { weekday, day } = dayParts(date);

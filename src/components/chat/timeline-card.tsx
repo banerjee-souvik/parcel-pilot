@@ -68,7 +68,11 @@ export function TimelineCard({ detail }: { detail: ShipmentDetail }) {
   const showEstimate = detail.eta && detail.status !== "delivered" && detail.status !== "lost";
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-border bg-bg">
+    <div
+      role="group"
+      aria-label={`Shipment timeline for ${detail.trackingNumber}`}
+      className="w-full overflow-hidden rounded-2xl border border-border bg-bg"
+    >
       <div className="flex items-center justify-between gap-3 bg-bg-subtle px-3.5 py-3">
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-semibold text-text-primary">{detail.trackingNumber}</span>
@@ -81,13 +85,13 @@ export function TimelineCard({ detail }: { detail: ShipmentDetail }) {
         </span>
       </div>
 
-      <div className="flex flex-col px-3.5 py-3">
+      <ol className="flex list-none flex-col px-3.5 py-3">
         {detail.events.map((event, i) => {
           const style = EVENT_STYLE[event.kind] ?? { icon: CircleDashed, tone: "accent" as const };
           const Icon = style.icon;
           const isWarn = style.tone === "warn";
           return (
-            <div key={i} className="flex gap-2.5 py-1.5">
+            <li key={i} className="flex gap-2.5 py-1.5">
               <Icon className={cn("mt-0.5 h-[17px] w-[17px] shrink-0", ICON_TONE_CLASSES[style.tone])} />
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className={cn("text-[13px]", isWarn ? "font-semibold text-warn" : "font-medium text-text-primary")}>
@@ -98,12 +102,12 @@ export function TimelineCard({ detail }: { detail: ShipmentDetail }) {
                   {formatEventDate(event.occurredAt)}
                 </span>
               </div>
-            </div>
+            </li>
           );
         })}
 
         {showEstimate && (
-          <div className="flex gap-2.5 py-1.5">
+          <li className="flex gap-2.5 py-1.5">
             <CircleDashed className="mt-0.5 h-[17px] w-[17px] shrink-0 text-text-secondary" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-[13px] font-medium text-text-primary">Estimated delivery</span>
@@ -112,9 +116,9 @@ export function TimelineCard({ detail }: { detail: ShipmentDetail }) {
                 {detail.originalEta && detail.originalEta !== detail.eta ? ` (revised from ${formatDateOnly(detail.originalEta)})` : ""}
               </span>
             </div>
-          </div>
+          </li>
         )}
-      </div>
+      </ol>
     </div>
   );
 }

@@ -96,3 +96,52 @@ jobs:
         run: yarn drizzle-kit push
       - if: steps.check-secret.outputs.has_key == 'true'
         run: yarn eval
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: parcelpilot
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/parcelpilot
+      # No REDIS_URL on purpose: this also exercises the documented graceful-degradation path (no
+      # Redis configured -> plain streaming, no resumption) rather than adding a service just to
+      # avoid it. The smoke test doesn't exercise resumption itself.
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --immutable
+      - name: Check for GROQ_API_KEY secret
+        id: check-secret
+        run: |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "::warning::GROQ_API_KEY secret not set — skipping e2e (this is expected on forks)."
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check-secret.outputs.has_key == 'true'
+        run: |
+          echo "DATABASE_URL=${DATABASE_URL}" > .env.local
+          echo "GROQ_API_KEY=${GROQ_API_KEY}" >> .env.local
+      - if: steps.check-secret.outputs.has_key == 'true'
+        run: yarn db:setup
+      - if: steps.check-secret.outputs.has_key == 'true'
+        run: yarn playwright install --with-deps chromium
+      - if: steps.check-secret.outputs.has_key == 'true'
+        run: yarn playwright test

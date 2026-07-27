@@ -9,9 +9,9 @@ Full design context: [`decisions.md`](./decisions.md) (why every technical choic
 (implementation spec).
 
 **Status:** chat loop, guardrails, tracing, the structured UI (timeline/date-picker/confirm/success
-cards), the confirm/cancel endpoints, and the landing page are working end-to-end locally. Stream
-resumption and the evals suite are still in progress. This README will get a proper deploy section
-once the app is deployed.
+cards), the confirm/cancel endpoints, resumable streams, the landing page, `/traces`, the eval
+suite, unit tests, and a Playwright smoke test are all working end-to-end locally, with CI wired
+up. Not yet deployed — this README gets a live URL once it is.
 
 ## Local development
 
@@ -26,6 +26,19 @@ yarn dev
 Open `/` for the landing page (with copyable demo tracking numbers) or `/chat` directly.
 Verification code for every seeded shipment is `7742`; the shipments themselves are in
 `src/lib/db/seed.ts`.
+
+## Testing
+
+```bash
+yarn test      # unit tests — guardrails matrix, proposal state machine, provider fallback
+yarn eval      # 8 scripted conversations against the real agent loop + a real LLM
+yarn e2e       # Playwright smoke test — landing through a filed claim, against a real build
+```
+
+`yarn eval` and `yarn e2e` call a real model (Groq by default — see `EVAL_MODEL` in `.env.example`),
+so they need a working API key and will consume a small amount of quota. Both retry once on
+transient infra failures; a genuine assertion failure means something's actually broken. `/traces`
+shows every model call and tool call from any run, including ones the tests generate.
 
 ## Stack
 

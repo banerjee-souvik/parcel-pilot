@@ -112,7 +112,7 @@ export function ChatClient({
               })
             )}
             {isBusy && (
-              <div className="w-full pr-10">
+              <div className="w-full pr-10" role="status" aria-label="Parcel Pilot is responding">
                 <div className="inline-flex items-center gap-1 rounded-2xl rounded-bl-md bg-bg-subtle px-3.5 py-2.5">
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-secondary [animation-delay:-0.3s]" />
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-secondary [animation-delay:-0.15s]" />
@@ -144,6 +144,7 @@ export function ChatClient({
         />
         <button
           type="submit"
+          aria-label="Send message"
           disabled={!canSend || !input.trim()}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-50"
         >

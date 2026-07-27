@@ -20,6 +20,23 @@ const PROPOSE_TOOLS = new Set([
   "tool-proposeClaim",
 ]);
 
+// Tools whose output renders as a card get a skeleton while executing (tech-design.md §13). Tools
+// with no card representation (lookupShipment, verifyIdentity, escalateToHuman) render nothing at
+// that stage either way, so there's no shape worth previewing.
+const CARD_TOOLS = new Set(["tool-getShipmentDetail", "tool-getRescheduleOptions", ...PROPOSE_TOOLS]);
+
+function CardSkeleton() {
+  return (
+    <div className="w-full animate-pulse overflow-hidden rounded-2xl border border-border bg-bg">
+      <div className="h-11 bg-bg-subtle" />
+      <div className="flex flex-col gap-2 p-3.5">
+        <div className="h-3 w-3/4 rounded bg-bg-subtle" />
+        <div className="h-3 w-1/2 rounded bg-bg-subtle" />
+      </div>
+    </div>
+  );
+}
+
 export function ToolPart({
   part,
   index,
@@ -67,6 +84,10 @@ export function ToolPart({
         {part.errorText ?? "Something went wrong."}
       </p>
     );
+  }
+
+  if (CARD_TOOLS.has(part.type) && (part.state === "input-streaming" || part.state === "input-available")) {
+    return <CardSkeleton key={index} />;
   }
 
   return null;

@@ -47,7 +47,7 @@ export function ConfirmCard({
   const disabled = status === "pending" || status === "resolved";
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-accent bg-bg">
+    <div role="group" aria-label={proposal.title} className="w-full overflow-hidden rounded-2xl border border-accent bg-bg">
       <div className="flex items-center gap-2 bg-accent-soft px-3.5 py-3">
         <CalendarCheck className="h-[18px] w-[18px] text-accent" />
         <span className="text-sm font-semibold text-text-primary">{proposal.title}</span>

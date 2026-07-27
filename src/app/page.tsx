@@ -5,6 +5,11 @@ import { shipments } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 import { DemoCard } from "@/components/landing/demo-card";
 
+// The whole point of querying the DB here is to prove setup actually worked (tech-design.md §13) —
+// a build-time-cached snapshot would show the same 5 shipments regardless of whether `yarn db:setup`
+// ever ran. Same class of bug as the traces layout; see decisions.md.
+export const dynamic = "force-dynamic";
+
 const TONE_ICON = { warn: "text-warn", success: "text-success", danger: "text-danger" };
 
 const DEMO_COPY: Record<

@@ -3,6 +3,12 @@ import { MessageCircle, Package } from "lucide-react";
 import { listTraces } from "@/lib/tracing";
 import { RunList } from "@/components/traces/run-list";
 
+// Without this, `next build`/`next start` can statically prerender this layout's DB query once and
+// cache it — a real bug found live: the run list kept showing a stale snapshot after `next build`,
+// missing traces created seconds earlier. This data is inherently request-time; nothing here should
+// ever be cached.
+export const dynamic = "force-dynamic";
+
 export default async function TracesLayout({ children }: { children: React.ReactNode }) {
   const runs = await listTraces();
 
