@@ -54,52 +54,54 @@ export default async function LandingPage() {
 
   return (
     <div className="flex w-full flex-col bg-bg">
-      <nav className="flex items-center justify-between gap-3 px-20 py-[18px]">
+      <nav className="flex items-center justify-between gap-3 px-5 py-[18px] sm:px-10 lg:px-20">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-accent">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-accent">
             <Package className="h-[18px] w-[18px] text-white" />
           </div>
           <span className="text-base font-semibold text-text-primary">Parcel Pilot</span>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-5">
           <Link href="/traces" className="text-sm font-medium text-text-secondary hover:text-text-primary">
             Traces
           </Link>
-          <a
-            href="https://github.com"
-            className="text-sm font-medium text-text-secondary hover:text-text-primary"
+          <Link
+            href="/chat"
+            prefetch={false}
+            className="shrink-0 rounded-[9px] bg-accent px-3.5 py-2.5 text-sm font-semibold text-white sm:px-[18px]"
           >
-            GitHub
-          </a>
-          <Link href="/chat" prefetch={false} className="rounded-[9px] bg-accent px-[18px] py-2.5 text-sm font-semibold text-white">
             Open chat
           </Link>
         </div>
       </nav>
 
-      <section className="flex items-center gap-20 px-20 py-16 pb-[72px]">
+      <section className="flex flex-col items-center gap-10 px-5 py-10 sm:px-10 lg:flex-row lg:gap-20 lg:px-20 lg:py-16 lg:pb-[72px]">
         <div className="flex w-full flex-col gap-5">
           <div className="flex w-fit items-center gap-1.5 rounded-full bg-accent-soft px-3 py-[5px]">
             <Sparkles className="h-[13px] w-[13px] text-accent" />
             <span className="text-xs font-semibold text-accent">SwiftShip delivery agent</span>
           </div>
-          <h1 className="text-[52px] font-bold leading-[1.1] text-text-primary">
+          <h1 className="text-4xl font-bold leading-[1.1] text-text-primary sm:text-5xl lg:text-[52px]">
             Your delivery, sorted in one conversation.
           </h1>
-          <p className="max-w-[520px] text-[17px] leading-relaxed text-text-secondary">
+          <p className="text-base leading-relaxed text-text-secondary sm:text-[17px] lg:max-w-[520px]">
             Track a parcel, move a delivery, or file a damage claim by just asking. Every change is confirmed by
             you before it happens — and never happens twice.
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             {/* prefetch=false: /chat redirects to a fresh /chat/[id] and creates a chat row as a
                 side effect — default prefetching would create one on every hover/scroll-into-view,
                 not just real clicks. */}
-            <Link href="/chat" prefetch={false} className="rounded-[10px] bg-accent px-6 py-[13px] text-[15px] font-semibold text-white">
+            <Link
+              href="/chat"
+              prefetch={false}
+              className="rounded-[10px] bg-accent px-6 py-[13px] text-center text-[15px] font-semibold text-white"
+            >
               Try the demo
             </Link>
             <Link
               href="/traces"
-              className="flex items-center gap-2 rounded-[10px] border border-border px-6 py-[13px] text-[15px] font-medium text-text-primary"
+              className="flex items-center justify-center gap-2 rounded-[10px] border border-border px-6 py-[13px] text-[15px] font-medium text-text-primary"
             >
               <Activity className="h-4 w-4" />
               See agent traces
@@ -107,7 +109,7 @@ export default async function LandingPage() {
           </div>
         </div>
 
-        <div className="flex w-[420px] shrink-0 flex-col gap-2.5 rounded-[18px] border border-border bg-bg-subtle p-5">
+        <div className="flex w-full flex-col gap-2.5 rounded-[18px] border border-border bg-bg-subtle p-5 lg:w-[420px] lg:shrink-0">
           <div className="flex justify-end">
             <div className="rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-md bg-accent px-3.5 py-2.5 text-[13px] text-white">
               My parcel says delayed — why?
@@ -118,7 +120,7 @@ export default async function LandingPage() {
               Heavy rain held it at the Nagpur hub. New ETA is Saturday. Want a different day?
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {["Reschedule", "Leave instructions", "It's fine"].map((chip) => (
               <span key={chip} className="rounded-full border border-border bg-bg px-3 py-1.5 text-xs font-medium text-accent">
                 {chip}
@@ -128,10 +130,10 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      <section className="flex flex-col gap-5 bg-bg-subtle px-20 py-12 pb-14">
+      <section className="flex flex-col gap-5 bg-bg-subtle px-5 py-10 sm:px-10 lg:px-20 lg:py-12 lg:pb-14">
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-2xl font-semibold text-text-primary">Grab a demo tracking number</h2>
-          <p className="text-[15px] text-text-secondary">
+          <h2 className="text-xl font-semibold text-text-primary sm:text-2xl">Grab a demo tracking number</h2>
+          <p className="text-sm text-text-secondary sm:text-[15px]">
             Seeded shipments, each in a different (messy) state. Verification code for all of them: 7742.
           </p>
         </div>
@@ -152,7 +154,7 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-8 px-20 py-12 sm:grid-cols-3">
+      <section className="grid grid-cols-1 gap-8 px-5 py-10 sm:grid-cols-3 sm:px-10 lg:px-20 lg:py-12">
         {[
           {
             icon: ShieldCheck,
@@ -180,11 +182,10 @@ export default async function LandingPage() {
         ))}
       </section>
 
-      <footer className="flex items-center justify-between border-t border-border px-20 py-5">
+      <footer className="flex flex-col items-start gap-2 border-t border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-10 lg:px-20">
         <span className="text-[13px] text-text-secondary">
-          Parcel Pilot — a take-home build. Fictional carrier, real agent.
+          Parcel Pilot — Fictional carrier, real agent.
         </span>
-        <span className="text-[13px] font-medium text-text-secondary">decisions.md · design.md · GitHub</span>
       </footer>
     </div>
   );

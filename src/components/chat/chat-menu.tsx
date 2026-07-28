@@ -1,6 +1,6 @@
 "use client";
 
-import { EllipsisVertical, Package, SquarePen } from "lucide-react";
+import { Activity, EllipsisVertical, House, Package, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -58,6 +58,20 @@ export function ChatMenu({ onSend }: { onSend: (text: string) => void }) {
           >
             <SquarePen className="h-3.5 w-3.5 text-text-secondary" />
             New conversation
+          </Link>
+          <Link
+            href="/"
+            className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-medium text-text-primary hover:bg-bg-subtle"
+          >
+            <House className="h-3.5 w-3.5 text-text-secondary" />
+            Home
+          </Link>
+          <Link
+            href="/traces"
+            className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-medium text-text-primary hover:bg-bg-subtle"
+          >
+            <Activity className="h-3.5 w-3.5 text-text-secondary" />
+            Traces
           </Link>
 
           <div className="my-1.5 border-t border-border" />

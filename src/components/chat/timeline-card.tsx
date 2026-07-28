@@ -8,6 +8,7 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ShipmentDetail } from "@/lib/domain/types";
 
@@ -50,16 +51,6 @@ const ICON_TONE_CLASSES = {
   accent: "text-accent",
 };
 
-function formatEventDate(iso: string): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(
-    new Date(iso)
-  );
-}
-
-function formatDateOnly(iso: string): string {
-  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(iso));
-}
-
 export function TimelineCard({ detail }: { detail: ShipmentDetail }) {
   const badge = detail.exception
     ? { label: detail.exception.summary, tone: "warn" as const }
@@ -99,7 +90,7 @@ export function TimelineCard({ detail }: { detail: ShipmentDetail }) {
                 </span>
                 <span className="text-xs leading-relaxed text-text-secondary">
                   {event.location ? `${event.location} · ` : ""}
-                  {formatEventDate(event.occurredAt)}
+                  {formatDisplayDateTime(event.occurredAt)}
                 </span>
               </div>
             </li>
@@ -112,8 +103,10 @@ export function TimelineCard({ detail }: { detail: ShipmentDetail }) {
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-[13px] font-medium text-text-primary">Estimated delivery</span>
               <span className="text-xs leading-relaxed text-text-secondary">
-                {formatDateOnly(detail.eta!)}
-                {detail.originalEta && detail.originalEta !== detail.eta ? ` (revised from ${formatDateOnly(detail.originalEta)})` : ""}
+                {formatDisplayDate(detail.eta!)}
+                {detail.originalEta && detail.originalEta !== detail.eta
+                  ? ` (revised from ${formatDisplayDate(detail.originalEta)})`
+                  : ""}
               </span>
             </div>
           </li>

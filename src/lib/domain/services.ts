@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import type { UIMessage } from "ai";
 import { db } from "../db";
 import { actions, chats, messages, shipmentEvents, shipments } from "../db/schema";
+import { formatDisplayDate, formatDisplayDateTime } from "../format";
 import * as guardrails from "./guardrails";
 import {
   ActionKind,
@@ -144,10 +145,18 @@ export async function getShipmentDetail(chatId: string, trackingNumber: string):
     city: shipment.city,
     eta: shipment.eta?.toISOString() ?? null,
     originalEta: shipment.originalEta?.toISOString() ?? null,
+    etaDisplay: shipment.eta ? formatDisplayDate(shipment.eta.toISOString()) : null,
+    originalEtaDisplay: shipment.originalEta ? formatDisplayDate(shipment.originalEta.toISOString()) : null,
     deliveryWindow: shipment.deliveryWindow,
     deliveryInstructions: shipment.deliveryInstructions,
     exception: shipment.exception,
-    events: events.map((e) => ({ kind: e.kind, summary: e.summary, location: e.location, occurredAt: e.occurredAt.toISOString() })),
+    events: events.map((e) => ({
+      kind: e.kind,
+      summary: e.summary,
+      location: e.location,
+      occurredAt: e.occurredAt.toISOString(),
+      occurredAtDisplay: formatDisplayDateTime(e.occurredAt.toISOString()),
+    })),
   });
 }
 

@@ -21,7 +21,7 @@ export function buildTools({ chatId }: { chatId: string }) {
 
     getShipmentDetail: tool({
       description:
-        "Get full shipment detail — status, address, timeline events, exceptions — rendered to the customer as a timeline card. Call this whenever they ask about status or timeline, even if you already showed it earlier in the conversation, rather than repeating what you remember in plain text. Requires prior identity verification for this tracking number.",
+        "Get full shipment detail — status, address, timeline events, exceptions — rendered to the customer as a timeline card. Call this whenever they ask about status or timeline, even if you already showed it earlier in the conversation, rather than repeating what you remember in plain text. Requires prior identity verification for this tracking number. If you also describe anything from this in prose, use the etaDisplay/originalEtaDisplay/occurredAtDisplay fields (e.g. \"Wed, Jul 29\") — never the raw eta/originalEta/occurredAt ISO timestamps, which are only there for the card to render.",
       inputSchema: z.object({ trackingNumber: z.string() }),
       execute: async ({ trackingNumber }) => {
         const result = await services.getShipmentDetail(chatId, trackingNumber);

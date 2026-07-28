@@ -50,6 +50,9 @@ export type ShipmentEventView = {
   summary: string;
   location: string | null;
   occurredAt: string;
+  // Pre-formatted for the model to quote in prose — see src/lib/format.ts. `occurredAt` stays raw
+  // ISO for the timeline card's own Intl formatting.
+  occurredAtDisplay: string;
 };
 
 export type ShipmentDetail = {
@@ -61,6 +64,9 @@ export type ShipmentDetail = {
   city: string;
   eta: string | null;
   originalEta: string | null;
+  // Pre-formatted companions to eta/originalEta — see src/lib/format.ts.
+  etaDisplay: string | null;
+  originalEtaDisplay: string | null;
   deliveryWindow: string | null;
   deliveryInstructions: string | null;
   exception: { code: string; summary: string } | null;
