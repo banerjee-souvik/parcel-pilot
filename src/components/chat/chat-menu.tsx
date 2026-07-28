@@ -76,9 +76,11 @@ export function ChatMenu({ onSend }: { onSend: (text: string) => void }) {
 
           <div className="my-1.5 border-t border-border" />
 
-          <div className="px-2.5 py-1.5 text-xs font-medium text-text-secondary">
-            Demo shipments — tap to track (verify code 7742)
+          <div className="mb-1 flex items-center justify-between gap-2 rounded-xl bg-accent-soft px-2.5 py-2">
+            <span className="text-xs font-medium text-accent">Verification code for every demo shipment</span>
+            <span className="rounded-md bg-bg px-2 py-0.5 font-mono text-sm font-bold text-accent">7742</span>
           </div>
+          <div className="px-2.5 py-1 text-xs font-medium text-text-secondary">Demo shipments — tap to track</div>
           {shipments === null && <div className="px-2.5 py-3 text-sm text-text-secondary">Loading…</div>}
           {shipments?.length === 0 && <div className="px-2.5 py-3 text-sm text-text-secondary">No seeded shipments found.</div>}
           {shipments?.map((s) => {

@@ -1,5 +1,7 @@
 # Parcel Pilot
 
+**Live:** [parcel-pilot-lyart.vercel.app](https://parcel-pilot-lyart.vercel.app/)
+
 A conversational delivery agent for a fictional carrier (SwiftShip). Track shipments, reschedule
 deliveries, update instructions, change addresses, and file damage claims — via chat, backed by a
 real Postgres domain model and enforced guardrails.
@@ -10,8 +12,8 @@ Full design context: [`decisions.md`](./decisions.md) (why every technical choic
 
 **Status:** chat loop, guardrails, tracing, the structured UI (timeline/date-picker/confirm/success
 cards), the confirm/cancel endpoints, resumable streams, the landing page, `/traces`, the eval
-suite, unit tests, and a Playwright smoke test are all working end-to-end locally, with CI wired
-up. Not yet deployed — this README gets a live URL once it is.
+suite, unit tests, and a Playwright smoke test are all working end-to-end, deployed on Vercel
+(Neon Postgres + Upstash Redis in production), with CI wired up.
 
 ## Local development
 
@@ -31,7 +33,7 @@ Verification code for every seeded shipment is `7742`; the shipments themselves 
 
 ```bash
 yarn test      # unit tests — guardrails matrix, proposal state machine, provider config
-yarn eval      # 8 scripted conversations against the real agent loop + a real LLM
+yarn eval      # 9 scripted conversations against the real agent loop + a real LLM
 yarn e2e       # Playwright smoke test — landing through a filed claim, against a real build
 ```
 

@@ -1,6 +1,6 @@
 # design.md
 
-Why the product looks and behaves the way it does. Mocks live in `design/parcel-pilot.pen` (Pencil). Companion to `decisions.md`, which covers the technical calls.
+Why the product looks and behaves the way it does. Mocked in Pencil during planning (not a repo artifact — the design tool, not a committed file). Companion to `decisions.md`, which covers the technical calls.
 
 ## What's actually in the product
 
@@ -50,7 +50,7 @@ Two panels: conversations on the left (with a status dot — green completed, am
 
 ## Landing page
 
-One job: get a stranger from URL to a working conversation in under a minute. Hero states the promise and the safety model in two sentences, a live-looking chat preview shows the product before any click, and the three demo tracking numbers are cards with the scenario spelled out — including one ("out for delivery, try changing the address") that invites the evaluator to watch the agent refuse. Advertising the refusal is deliberate: the guardrails are a feature, so the landing page sells them.
+One job: get a stranger from URL to a working conversation in under a minute. Hero states the promise and the safety model in two sentences, a live-looking chat preview shows the product before any click, and the five demo tracking numbers are cards with the scenario spelled out — including one ("out for delivery, try changing the address") that invites the evaluator to watch the agent refuse. Advertising the refusal is deliberate: the guardrails are a feature, so the landing page sells them.
 
 ## What I deliberately didn't design
 
