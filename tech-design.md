@@ -27,7 +27,7 @@ These are the contract. Every one of these must hold in the final build and each
 |---|---|---|
 | Framework | `next` 16.x + TypeScript, App Router | single deployable on Vercel. **Next 16 breaking change:** `params`/`searchParams` in pages and route handlers are `Promise`s with no sync fallback — every dynamic route (`api/chat/[id]/stream`, `api/proposals/[id]/confirm`, `api/proposals/[id]/cancel`, `chat/[id]`, `traces/[id]`) must `await props.params`. Scripts use `next dev`/`next build` with no `--turbopack` flag (Turbopack is default in 16). |
 | Agent/streaming | `ai` v7.x + `@ai-sdk/react` v4.x | **v7 API surface, confirmed 2026-07-25 against live docs** — this is a fast-moving library; the names below are current as of install time and are pinned by the committed lockfile, so they will not drift under you mid-build. Key v7 renames vs. what older training data or older blog posts may show: `system` → `instructions`; `streamText().onFinish` callback → `onEnd`; per-step callback `onStepFinish` → `onStepEnd`; `experimental_onToolCallStart/Finish` → `onToolExecutionStart/onToolExecutionEnd`; `stepCountIs` → `isStepCount`; `result.fullStream` → `result.stream`; `result.toUIMessageStreamResponse()` / `result.toUIMessageStream()` (instance methods) are deprecated → use the stateless top-level helpers `toUIMessageStream({stream: result.stream, ...})` and `createUIMessageStreamResponse({stream, consumeSseStream})` imported from `'ai'`. `convertToModelMessages` is now `async` — must be awaited. Do NOT use v4 idioms either (`parameters` instead of `inputSchema`, `toDataStreamResponse`, `api:` route strings). Requires Node 22+ and ESM (both already satisfied). If any of the above conflicts with what you observe in `node_modules/ai`'s published types, the installed package wins — but this list should match exactly, since nothing gets upgraded mid-build. |
-| LLM providers | `@ai-sdk/google` (default), `@ai-sdk/groq` (fallback) | models: `gemini-3.6-flash`, `openai/gpt-oss-120b`. **Model names verified live 2026-07-25, not assumed** — the originally-planned `gemini-2.5-flash` returned a 404 ("no longer available to new users") the first time this was actually run, and `llama-3.3-70b-versatile` was found to deprecate 2026-08-16. Provider model catalogs move fast; before this build ships, re-check `google` model availability at ai.google.dev/gemini-api/docs/models and Groq's at console.groq.com/docs/deprecations rather than trusting this table blindly if much time has passed. |
+| LLM provider | `@ai-sdk/groq` | model: `openai/gpt-oss-120b`. **Model name verified live 2026-07-25, not assumed** — the originally-planned `llama-3.3-70b-versatile` was found to deprecate 2026-08-16. Provider model catalogs move fast; before this build ships, re-check availability at console.groq.com/docs/deprecations rather than trusting this table blindly if much time has passed. Groq was originally paired with Gemini as a fallback (see decisions.md #4); dropped to Groq-only once Groq proved reliable through the whole build — see decisions.md #20. |
 | DB | Neon Postgres, `drizzle-orm` + `drizzle-kit`, `postgres` (postgres.js driver) | one `DATABASE_URL`, works for Neon and local Docker |
 | Stream resumption | `resumable-stream` + Redis (`REDIS_URL`, Upstash) | see §11 |
 | Validation | `zod` | tool schemas + API payloads |
@@ -94,9 +94,7 @@ parcel-pilot/
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/parcelpilot  # Neon URL in prod
 REDIS_URL=            # optional locally; required for stream resumption (Upstash rediss://)
-GOOGLE_GENERATIVE_AI_API_KEY=   # default provider (free tier: aistudio.google.com)
-GROQ_API_KEY=         # optional; used if Google key absent
-EVAL_MODEL=           # optional override for eval runs
+GROQ_API_KEY=         # required (free tier: console.groq.com/keys)
 ```
 
 Scripts in `package.json`:
@@ -298,7 +296,6 @@ cancelProposal(proposalId, chatId): Result<true>
 ### provider.ts
 ```ts
 export function getModel() {
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) return google("gemini-3.6-flash");
   if (process.env.GROQ_API_KEY) return groq("openai/gpt-oss-120b");
   throw new MissingProviderError(); // POST route converts to a friendly 503 JSON the UI renders
 }
@@ -482,7 +479,7 @@ On mount with `resume: true`, the SDK automatically fires the GET route to reatt
 
 **Crash-truth rule:** if the server dies between proposal creation and stream end, on next load the chat re-hydrates from `messages` + `actions`; a `proposed` action with no receipt renders the ConfirmCard again from the persisted tool part — still valid, still confirmable, and never auto-executed. This is the "interrupted tool call reports truthfully" story.
 
-**Rate limits / provider errors.** Errors thrown mid-generation (a 429, a provider outage) don't reject `buildAgentStream`'s promise — the AI SDK catches them internally and emits a plain `{type: "error", errorText: "An error occurred."}` chunk instead (verified by triggering a real Gemini free-tier 429 and reading the actual SSE output). The only hook that lets you shape what the client sees is `toUIMessageStream`'s `onError: (error: unknown) => string` — without it, every failure looks identical to the client. Detect the rate-limit case with `APICallError.isInstance(error) && error.statusCode === 429` (both re-exported from `'ai'`) and return a small JSON-encoded marker (`{code: "RATE_LIMITED"}`) instead of a display string; the client's `useChat().error.message` receives that string verbatim (confirmed by reading the SDK's chunk-processing code: `case "error": onError?.(new Error(chunk.errorText))`), so parse it with `JSON.parse` and fall back to a generic message if parsing fails. On the client, a `RATE_LIMITED` code shows the amber banner with a countdown (~15s is plenty — don't try to parse an exact retry-after out of the provider's error body, its shape is provider-specific and would silently break switching from Gemini to Groq); when the countdown hits zero, call `clearError()` then `regenerate()` to retry the same turn automatically. Zod tool-arg failures are NOT user errors: AI SDK feeds them back to the model (`experimental_repairToolCall` optional; default retry loop is fine) — trace them as spans with outcome `error`.
+**Rate limits / provider errors.** Errors thrown mid-generation (a 429, a provider outage) don't reject `buildAgentStream`'s promise — the AI SDK catches them internally and emits a plain `{type: "error", errorText: "An error occurred."}` chunk instead (verified by triggering a real Groq free-tier 429 and reading the actual SSE output). The only hook that lets you shape what the client sees is `toUIMessageStream`'s `onError: (error: unknown) => string` — without it, every failure looks identical to the client. Detect the rate-limit case with `APICallError.isInstance(error) && error.statusCode === 429` (both re-exported from `'ai'`) — note a real 429 sometimes arrives wrapped in a `RetryError` after the SDK exhausts its internal retries, not as a bare `APICallError`; unwrap it first, or the misclassification silently soft-locks the chat input (see decisions.md #19) — and return a small JSON-encoded marker (`{code: "RATE_LIMITED"}`) instead of a display string; the client's `useChat().error.message` receives that string verbatim (confirmed by reading the SDK's chunk-processing code: `case "error": onError?.(new Error(chunk.errorText))`), so parse it with `JSON.parse` and fall back to a generic message if parsing fails. On the client, a `RATE_LIMITED` code shows the amber banner with a countdown (~15s is plenty — don't try to parse an exact retry-after out of the provider's error body); when the countdown hits zero, call `clearError()` then `regenerate()` to retry the same turn automatically. Zod tool-arg failures are NOT user errors: AI SDK feeds them back to the model (`experimental_repairToolCall` optional; default retry loop is fine) — trace them as spans with outcome `error`.
 
 ---
 
@@ -546,7 +543,7 @@ Runner output: per-scenario pass/fail table + failed-assertion detail; CI-friend
 
 ## 16. CI (GitHub Actions, `.github/workflows/ci.yml`)
 
-Jobs: `lint+typecheck` → `unit` (postgres service container, `db:setup`) → `evals` (needs `GOOGLE_GENERATIVE_AI_API_KEY` secret; **skip with a loud annotation if secret absent** so forks stay green) → `e2e` (postgres+redis services, build, playwright). Cache yarn.
+Jobs: `lint+typecheck` → `unit` (postgres service container, `db:setup`) → `evals` (needs `GROQ_API_KEY` secret; **skip with a loud annotation if secret absent** so forks stay green) → `e2e` (postgres+redis services, build, playwright). Cache yarn.
 
 ---
 
@@ -587,7 +584,7 @@ Commit style: conventional-ish, small, message explains *why* (evaluators read h
 4. **Don't gate execution on model output.** Confirm endpoint trusts only `(proposalId, chatId)` + DB state. Ignore any model text claiming confirmation.
 5. **Persist user message before model call**, assistant message in `toUIMessageStream`'s `onEnd` + `after()` — order matters for invariants 5–6.
 6. **Timezone:** all date logic in a fixed zone (`Asia/Kolkata`) via date-fns; "Sunday" and "today" must be deterministic in tests (inject `now` into guardrails — already in signatures).
-7. **Gemini free-tier RPM is low (~10).** Evals run serially; add ~2s spacing between scenarios; retry-once policy. Don't parallelize eval scenarios.
+7. **Groq's free tier has both a daily request cap and a daily token cap.** Evals run serially; add ~2s spacing between scenarios; retry-once policy. Don't parallelize eval scenarios.
 8. **`stopWhen: isStepCount(6)`** — without it, tool loops can spin.
 9. **Seed relative dates** — never hardcode calendar dates anywhere (code, tests, or evals); everything derives from `now`.
 10. **Keep `buildAgentStream` the single loop** — if the route and evals drift apart, evals stop proving anything.

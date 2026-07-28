@@ -240,3 +240,15 @@ Small honest footnote: I originally planned around `gemini-2.5-flash` and `llama
 **Reasoning:** This is the same lesson as decision #12's Redis singleton bug and #10's caching bug, a third time: the bug that matters most is rarely the one you're actively looking for. I was verifying a UI scroll tweak; the thing worth finding was three layers removed from it, and only surfaced because the test suite doesn't get skipped just because a change "should" be unrelated.
 
 **Deliberately cut:** Nothing — a soft-locked chat input during the exact failure mode (rate limiting) the banner exists to handle is the kind of bug that makes the safety feature actively worse than having none.
+
+---
+
+## 20. Dropping Gemini — Groq-only from here on
+
+**Decision:** Removed `@ai-sdk/google` and the Google-first fallback in `provider.ts`. `GROQ_API_KEY` is now the only provider config the app reads; `getModel`/`getModelId` throw `MissingProviderError` if it's absent. Also dropped `EVAL_MODEL`'s google/groq pinning (no longer meaningful with one provider) — `getEvalModel`/`getEvalModelId` are now thin aliases for `getModel`/`getModelId`, kept as their own functions only so the eval harness has a seam to diverge from prod's provider choice later if it ever needs to, not because they do anything different today.
+
+**Alternatives considered:** Leaving the fallback in place but reordering it Groq-first, Google-second — keeps the "free key in two minutes, from either provider" story from decision #4 alive for anyone who happens to have a Google key instead of a Groq one.
+
+**Reasoning:** By this point in the build, Groq is the provider that's actually been carrying every real session — the two genuine Gemini-related pain points logged earlier (decision #10's 20 req/day wall that blocked a full live pass on Day 2, and the Gemini 400 in decision #8) never came up again once Groq took over, and the two-provider abstraction was costing real surface area for a fallback path that, in practice, wasn't the one doing the work: a second SDK dependency, a second env var to explain in the README, and a fallback-order test in `provider.test.ts` exercising a code path nobody was actually depending on. Simpler beats theoretically-more-flexible once the theoretical case stops paying rent.
+
+**Deliberately cut:** The fallback itself, and everything that existed only to support it (`GOOGLE_GENERATIVE_AI_API_KEY` in `.env.example`, the `EVAL_MODEL=google` pin, the Google-preference test in `provider.test.ts`). Left the historical entries (#4, #8, #10) exactly as written — they're an accurate record of what was true when they were made, not something to retcon now that the provider story has changed.

@@ -14,7 +14,6 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.23",
     "@ai-sdk/groq": "^4.0.13",
     "@ai-sdk/react": "^4.0.40",
     "ai": "^7.0.37",

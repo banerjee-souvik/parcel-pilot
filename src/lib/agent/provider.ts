@@ -1,43 +1,34 @@
-import { google } from "@ai-sdk/google";
 import { groq } from "@ai-sdk/groq";
 
 export class MissingProviderError extends Error {
   constructor() {
-    super("No LLM provider configured. Set GOOGLE_GENERATIVE_AI_API_KEY or GROQ_API_KEY.");
+    super("No LLM provider configured. Set GROQ_API_KEY.");
     this.name = "MissingProviderError";
   }
 }
 
-// Model names verified live against provider docs on 2026-07-25 — gemini-2.5-flash and
-// llama-3.3-70b-versatile (both assumed in earlier planning) turned out to be deprecated/deprecating
-// by then. gemini-3.6-flash confirmed free-tier; openai/gpt-oss-120b is Groq's current recommended
-// free-tier replacement (llama-3.3-70b-versatile deprecates 2026-08-16).
-const GOOGLE_MODEL = "gemini-3.6-flash";
+// Model name verified live against Groq's docs on 2026-07-25 — llama-3.3-70b-versatile (assumed in
+// earlier planning) is on a deprecation clock three weeks out; openai/gpt-oss-120b is Groq's current
+// recommended free-tier replacement. See decisions.md #20 for why Groq is now the only provider.
 const GROQ_MODEL = "openai/gpt-oss-120b";
 
 export function getModel() {
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) return google(GOOGLE_MODEL);
   if (process.env.GROQ_API_KEY) return groq(GROQ_MODEL);
   throw new MissingProviderError();
 }
 
 export function getModelId(): string {
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) return GOOGLE_MODEL;
   if (process.env.GROQ_API_KEY) return GROQ_MODEL;
   throw new MissingProviderError();
 }
 
-// EVAL_MODEL lets the eval suite pin a specific provider ("google" | "groq") instead of whichever
-// key happens to be configured — useful for reproducing a scenario against a specific model, or for
-// keeping evals off whichever provider is quota-constrained that day. Falls back to getModel()/Id().
+// Kept as a thin alias rather than removed: the eval harness imports getEvalModel/getEvalModelId
+// specifically (not getModel/getModelId), and that seam is worth keeping even with one provider —
+// evals should always be able to diverge from prod's provider choice without a call-site change.
 export function getEvalModel() {
-  if (process.env.EVAL_MODEL === "google") return google(GOOGLE_MODEL);
-  if (process.env.EVAL_MODEL === "groq") return groq(GROQ_MODEL);
   return getModel();
 }
 
 export function getEvalModelId(): string {
-  if (process.env.EVAL_MODEL === "google") return GOOGLE_MODEL;
-  if (process.env.EVAL_MODEL === "groq") return GROQ_MODEL;
   return getModelId();
 }

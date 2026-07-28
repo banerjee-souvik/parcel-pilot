@@ -17,7 +17,7 @@ up. Not yet deployed — this README gets a live URL once it is.
 
 ```bash
 docker compose up -d        # Postgres + Redis
-cp .env.example .env.local  # then fill in GOOGLE_GENERATIVE_AI_API_KEY (or GROQ_API_KEY)
+cp .env.example .env.local  # then fill in GROQ_API_KEY
 yarn install
 yarn db:setup                # push schema + seed 5 demo shipments
 yarn dev
@@ -30,17 +30,17 @@ Verification code for every seeded shipment is `7742`; the shipments themselves 
 ## Testing
 
 ```bash
-yarn test      # unit tests — guardrails matrix, proposal state machine, provider fallback
+yarn test      # unit tests — guardrails matrix, proposal state machine, provider config
 yarn eval      # 8 scripted conversations against the real agent loop + a real LLM
 yarn e2e       # Playwright smoke test — landing through a filed claim, against a real build
 ```
 
-`yarn eval` and `yarn e2e` call a real model (Groq by default — see `EVAL_MODEL` in `.env.example`),
-so they need a working API key and will consume a small amount of quota. Both retry once on
-transient infra failures; a genuine assertion failure means something's actually broken. `/traces`
-shows every model call and tool call from any run, including ones the tests generate.
+`yarn eval` and `yarn e2e` call a real model (Groq), so they need a working `GROQ_API_KEY` and will
+consume a small amount of quota. Both retry once on transient infra failures; a genuine assertion
+failure means something's actually broken. `/traces` shows every model call and tool call from any
+run, including ones the tests generate.
 
 ## Stack
 
 Next.js 16 (App Router) · Vercel AI SDK v7 · Drizzle ORM + Postgres · Redis (for stream resumption) ·
-Gemini/Groq (free tier) · Tailwind
+Groq (free tier) · Tailwind

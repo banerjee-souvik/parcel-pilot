@@ -175,17 +175,17 @@ export async function seedDatabase() {
   await db.insert(traces).values({
     id: "t_demo",
     chatId: "c_demo",
-    model: "gemini-3.6-flash",
+    model: "openai/gpt-oss-120b",
     status: "completed",
     totalTokens: 4118,
     durationMs: 8400,
     createdAt: hoursAgo(now, 2),
   });
   await db.insert(traceSpans).values([
-    { id: "span_demo_1", traceId: "t_demo", seq: 0, kind: "model_call", name: "gemini-3.6-flash", input: null, output: { text: "Found it. Quick verification first…" }, durationMs: 812, tokens: 1204, outcome: "ok", startedAt: hoursAgo(now, 2) },
+    { id: "span_demo_1", traceId: "t_demo", seq: 0, kind: "model_call", name: "openai/gpt-oss-120b", input: null, output: { text: "Found it. Quick verification first…" }, durationMs: 812, tokens: 1204, outcome: "ok", startedAt: hoursAgo(now, 2) },
     { id: "span_demo_2", traceId: "t_demo", seq: 1, kind: "tool_call", name: "verifyIdentity", input: { trackingNumber: "SS-4417-DEMO", phoneLast4: "7742" }, output: { ok: true }, durationMs: 34, tokens: null, outcome: "ok", startedAt: hoursAgo(now, 2) },
     { id: "span_demo_3", traceId: "t_demo", seq: 2, kind: "tool_call", name: "getShipmentDetail", input: { trackingNumber: "SS-4417-DEMO" }, output: { status: "exception" }, durationMs: 41, tokens: null, outcome: "ok", startedAt: hoursAgo(now, 2) },
-    { id: "span_demo_4", traceId: "t_demo", seq: 3, kind: "model_call", name: "gemini-3.6-flash", input: null, output: { text: "shipment status + timeline card" }, durationMs: 1096, tokens: 1488, outcome: "ok", startedAt: hoursAgo(now, 2) },
+    { id: "span_demo_4", traceId: "t_demo", seq: 3, kind: "model_call", name: "openai/gpt-oss-120b", input: null, output: { text: "shipment status + timeline card" }, durationMs: 1096, tokens: 1488, outcome: "ok", startedAt: hoursAgo(now, 2) },
   ]);
 
   console.log("Seeded 5 demo shipments + 1 demo chat/trace.");
