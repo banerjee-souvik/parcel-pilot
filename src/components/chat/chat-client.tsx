@@ -3,8 +3,9 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowUp } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatHeader } from "./chat-header";
+import { FormattedText } from "./formatted-text";
 import { MessageBubble } from "./message-bubble";
 import { OfflineBanner, useIsOffline } from "./offline-banner";
 import { RateLimitBanner } from "./rate-limit-banner";
@@ -33,6 +34,8 @@ export function ChatClient({
   const [input, setInput] = useState("");
   const [pillDismissed, setPillDismissed] = useState(false);
   const isOffline = useIsOffline();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const { messages, sendMessage, setMessages, status, error, clearError, regenerate } = useChat({
     id: chatId,
@@ -75,9 +78,26 @@ export function ChatClient({
   const errorCode = parseErrorCode(error);
   const canSend = status === "ready" && !isOffline;
 
+  // Re-focus whenever the input goes from disabled to enabled — i.e. right as a response finishes
+  // (or on initial mount, or coming back online). `canSend` is a boolean primitive, so this only
+  // re-fires on an actual disabled<->enabled transition, not every render. Every send path (typed
+  // text, suggestion chips, date-picker taps, confirm/cancel) funnels through the same status cycle,
+  // so one effect covers all of them.
+  useEffect(() => {
+    if (canSend) inputRef.current?.focus();
+  }, [canSend]);
+
+  // `messages` gets a new array/content on every streamed chunk (useChat replaces it immutably),
+  // so this fires continuously while a reply streams in, not just once when it's added — the
+  // container tracks the bottom throughout, not just after the fact. Instant, not smooth: a
+  // "smooth" scroll re-triggered many times a second during streaming looks janky, not fluid.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+  }, [messages, isBusy]);
+
   return (
     <div className="mx-auto flex h-screen w-full max-w-md flex-col bg-bg">
-      <ChatHeader />
+      <ChatHeader onSend={send} />
 
       <div className="flex-1 overflow-y-auto">
         {showResumedPill && (
@@ -95,7 +115,7 @@ export function ChatClient({
                 if (part.type === "text" && part.text) {
                   return (
                     <MessageBubble key={`${message.id}-${i}`} role={message.role === "user" ? "user" : "assistant"}>
-                      <span className="whitespace-pre-wrap">{part.text}</span>
+                      <FormattedText text={part.text} />
                     </MessageBubble>
                   );
                 }
@@ -124,6 +144,7 @@ export function ChatClient({
             {errorCode === "UNKNOWN" && (
               <p className="text-xs font-medium text-danger">Something went wrong. Please try again.</p>
             )}
+            <div ref={bottomRef} />
           </div>
         )}
       </div>
@@ -136,6 +157,7 @@ export function ChatClient({
 
       <form onSubmit={handleSubmit} className="flex items-center gap-2.5 border-t border-border bg-bg px-4 py-3">
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Message Parcel Pilot…"

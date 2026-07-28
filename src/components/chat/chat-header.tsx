@@ -1,6 +1,7 @@
-import { EllipsisVertical, Package } from "lucide-react";
+import { Package } from "lucide-react";
+import { ChatMenu } from "./chat-menu";
 
-export function ChatHeader() {
+export function ChatHeader({ onSend }: { onSend: (text: string) => void }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border bg-bg px-5 py-3">
       <div className="flex items-center gap-2.5">
@@ -15,7 +16,7 @@ export function ChatHeader() {
           </div>
         </div>
       </div>
-      <EllipsisVertical className="h-5 w-5 text-text-secondary" />
+      <ChatMenu onSend={onSend} />
     </div>
   );
 }

@@ -26,7 +26,7 @@ const EVENT_STYLE: Record<string, { icon: LucideIcon; tone: "success" | "warn" |
   claim_filed: { icon: FileWarning, tone: "warn" },
 };
 
-const STATUS_BADGE: Record<ShipmentDetail["status"], { label: string; tone: "success" | "warn" | "accent" | "neutral" }> = {
+export const STATUS_BADGE: Record<ShipmentDetail["status"], { label: string; tone: "success" | "warn" | "accent" | "neutral" }> = {
   label_created: { label: "Label created", tone: "neutral" },
   in_transit: { label: "In transit", tone: "accent" },
   exception: { label: "Exception", tone: "warn" },
@@ -37,7 +37,7 @@ const STATUS_BADGE: Record<ShipmentDetail["status"], { label: string; tone: "suc
   lost: { label: "Lost", tone: "warn" },
 };
 
-const TONE_CLASSES = {
+export const TONE_CLASSES = {
   success: "bg-success-soft text-success",
   warn: "bg-warn-soft text-warn",
   accent: "bg-accent-soft text-accent",

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { UIMessage } from "ai";
 import { db } from "../db";
@@ -31,11 +31,16 @@ function confirmationNumber(kind: ActionKind): string {
 
 // --- Chat / message persistence (used by the API route; see tech-design.md §11) ---
 
+// SELECT-then-INSERT has a real race: Next.js Link prefetch + the actual click can both invoke a
+// fresh chat page for the same id in close succession, so both can pass the "does it exist?" check
+// before either commits — the second INSERT then hits chats_pkey. onConflictDoNothing makes this
+// atomic instead of relying on timing; if a concurrent request already created the row, we just
+// read it back rather than trying (and failing) to create it again.
 export async function ensureChat(chatId: string) {
+  const [created] = await db.insert(chats).values({ id: chatId }).onConflictDoNothing().returning();
+  if (created) return created;
   const [existing] = await db.select().from(chats).where(eq(chats.id, chatId)).limit(1);
-  if (existing) return existing;
-  const [created] = await db.insert(chats).values({ id: chatId }).returning();
-  return created;
+  return existing;
 }
 
 export async function loadChat(chatId: string) {
@@ -64,7 +69,26 @@ export async function setActiveStream(chatId: string, streamId: string | null) {
 
 // --- Shipment lookup / disclosure ---
 
-export async function lookupShipment(trackingNumber: string): Promise<Result<PublicShipmentSummary>> {
+// Locks a chat to the first shipment it ever engages with. The conditional UPDATE (only when still
+// null) is the same atomic-instead-of-racy discipline as ensureChat and executeProposal — two
+// concurrent first-touches on a brand-new chat can't disagree about which shipment won.
+async function scopeToShipment(chatId: string, trackingNumber: string): Promise<Result<true>> {
+  const chat = await ensureChat(chatId);
+  const check = guardrails.canEngageShipment(chat, trackingNumber);
+  if (!check.ok) return check;
+  if (!chat.scopedTrackingNumber) {
+    await db
+      .update(chats)
+      .set({ scopedTrackingNumber: trackingNumber })
+      .where(and(eq(chats.id, chatId), isNull(chats.scopedTrackingNumber)));
+  }
+  return ok(true);
+}
+
+export async function lookupShipment(chatId: string, trackingNumber: string): Promise<Result<PublicShipmentSummary>> {
+  const scope = await scopeToShipment(chatId, trackingNumber);
+  if (!scope.ok) return scope;
+
   const [shipment] = await db.select().from(shipments).where(eq(shipments.trackingNumber, trackingNumber)).limit(1);
   if (!shipment) {
     return refuse("SHIPMENT_NOT_FOUND", `I couldn't find a shipment with tracking number ${trackingNumber}.`);
@@ -73,6 +97,9 @@ export async function lookupShipment(trackingNumber: string): Promise<Result<Pub
 }
 
 export async function verifyIdentity(chatId: string, trackingNumber: string, phoneLast4: string): Promise<Result<true>> {
+  const scope = await scopeToShipment(chatId, trackingNumber);
+  if (!scope.ok) return scope;
+
   const [shipment] = await db.select().from(shipments).where(eq(shipments.trackingNumber, trackingNumber)).limit(1);
   if (!shipment) {
     return refuse("SHIPMENT_NOT_FOUND", `I couldn't find a shipment with tracking number ${trackingNumber}.`);
@@ -91,6 +118,9 @@ export async function verifyIdentity(chatId: string, trackingNumber: string, pho
 }
 
 export async function getShipmentDetail(chatId: string, trackingNumber: string): Promise<Result<ShipmentDetail>> {
+  const scope = await scopeToShipment(chatId, trackingNumber);
+  if (!scope.ok) return scope;
+
   const chat = await ensureChat(chatId);
   const disclose = guardrails.canDisclose(chat, trackingNumber);
   if (!disclose.ok) return disclose;
@@ -128,6 +158,9 @@ export async function getRescheduleOptions(
   chatId: string,
   trackingNumber: string
 ): Promise<Result<{ dates: string[]; windows: readonly string[] }>> {
+  const scope = await scopeToShipment(chatId, trackingNumber);
+  if (!scope.ok) return scope;
+
   const chat = await ensureChat(chatId);
   const disclose = guardrails.canDisclose(chat, trackingNumber);
   if (!disclose.ok) return disclose;
@@ -185,6 +218,9 @@ function friendlyDate(value: Date | string): string {
 }
 
 export async function proposeAction(chatId: string, payload: ProposePayload): Promise<Result<ProposalSummary>> {
+  const scope = await scopeToShipment(chatId, payload.trackingNumber);
+  if (!scope.ok) return scope;
+
   const chat = await ensureChat(chatId);
   const disclose = guardrails.canDisclose(chat, payload.trackingNumber);
   if (!disclose.ok) return disclose;

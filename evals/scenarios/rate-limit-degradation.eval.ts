@@ -1,4 +1,4 @@
-import { APICallError, generateId } from "ai";
+import { APICallError, generateId, RetryError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { describeError } from "@/app/api/chat/route";
@@ -39,6 +39,22 @@ describe("rate-limit-degradation", () => {
 
   it("a non-429 error still degrades to a typed (non-leaking) marker", () => {
     expect(JSON.parse(describeError(new Error("boom")))).toMatchObject({ code: "UNKNOWN" });
+  });
+
+  // Found live, not by inspection: the AI SDK retries a transient failure internally first, and once
+  // retries are exhausted it throws a RetryError wrapping the attempts — the object onError actually
+  // receives isn't the bare APICallError. A real Groq 429 was misclassified as UNKNOWN because of
+  // exactly this until fixed; this test pins the exact wrapped shape that broke it.
+  it("classifies a 429 as RATE_LIMITED even wrapped in a RetryError (what the SDK actually throws)", () => {
+    const inner = new APICallError({
+      message: "Rate limit exceeded",
+      url: "https://mock.invalid/generate",
+      requestBodyValues: {},
+      statusCode: 429,
+      isRetryable: true,
+    });
+    const wrapped = new RetryError({ message: "Failed after 3 attempts", reason: "maxRetriesExceeded", errors: [inner, inner] });
+    expect(JSON.parse(describeError(wrapped))).toEqual({ code: "RATE_LIMITED" });
   });
 
   it("the user's message survives even when the model call fails outright (invariant 6)", async () => {

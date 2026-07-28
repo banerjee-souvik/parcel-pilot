@@ -187,6 +187,27 @@ describe("canDisclose", () => {
   });
 });
 
+describe("canEngageShipment — one shipment per chat, for the chat's whole lifetime", () => {
+  it("allows the first shipment a chat ever touches", () => {
+    const result = guardrails.canEngageShipment({ scopedTrackingNumber: null }, "SS-4417-DEMO");
+    expect(result.ok).toBe(true);
+  });
+
+  it("allows repeated calls for the same shipment once scoped", () => {
+    const result = guardrails.canEngageShipment({ scopedTrackingNumber: "SS-4417-DEMO" }, "SS-4417-DEMO");
+    expect(result.ok).toBe(true);
+  });
+
+  it("refuses a different shipment once the chat is already scoped", () => {
+    const result = guardrails.canEngageShipment({ scopedTrackingNumber: "SS-4417-DEMO" }, "SS-9021-DEMO");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("SHIPMENT_SESSION_LOCKED");
+      expect(result.message).toContain("SS-4417-DEMO");
+    }
+  });
+});
+
 function nextWeekday(): string {
   const d = new Date();
   d.setDate(d.getDate() + 2);

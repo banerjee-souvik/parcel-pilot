@@ -71,7 +71,7 @@ export default async function LandingPage() {
           >
             GitHub
           </a>
-          <Link href="/chat" className="rounded-[9px] bg-accent px-[18px] py-2.5 text-sm font-semibold text-white">
+          <Link href="/chat" prefetch={false} className="rounded-[9px] bg-accent px-[18px] py-2.5 text-sm font-semibold text-white">
             Open chat
           </Link>
         </div>
@@ -91,7 +91,10 @@ export default async function LandingPage() {
             you before it happens — and never happens twice.
           </p>
           <div className="flex gap-3">
-            <Link href="/chat" className="rounded-[10px] bg-accent px-6 py-[13px] text-[15px] font-semibold text-white">
+            {/* prefetch=false: /chat redirects to a fresh /chat/[id] and creates a chat row as a
+                side effect — default prefetching would create one on every hover/scroll-into-view,
+                not just real clicks. */}
+            <Link href="/chat" prefetch={false} className="rounded-[10px] bg-accent px-6 py-[13px] text-[15px] font-semibold text-white">
               Try the demo
             </Link>
             <Link

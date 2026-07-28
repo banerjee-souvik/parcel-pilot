@@ -1,4 +1,4 @@
-import { APICallError, createUIMessageStreamResponse, generateId, toUIMessageStream, type UIMessage } from "ai";
+import { APICallError, createUIMessageStreamResponse, generateId, RetryError, toUIMessageStream, type UIMessage } from "ai";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream/ioredis";
 import { buildAgentStream } from "@/lib/agent/run";
@@ -15,8 +15,20 @@ export const maxDuration = 60;
 // client can parse for the rate-limit banner, falling back to plain text for anything unrecognized.
 // Exported so the rate-limit-degradation eval can verify this exact function (not a reimplementation
 // of it) classifies a mock 429 correctly.
+//
+// A real 429 doesn't necessarily arrive as a bare APICallError — the SDK retries transient failures
+// internally first, and once retries are exhausted it throws a RetryError wrapping the underlying
+// attempts in `.errors`/`.lastError`. Checking APICallError.isInstance(error) directly missed this:
+// confirmed live, a genuine Groq 429 was misclassified as UNKNOWN because the object `onError`
+// actually received was the RetryError wrapper, not the APICallError inside it.
+function unwrapRetryError(error: unknown): unknown {
+  if (!RetryError.isInstance(error)) return error;
+  return error.errors.find((e) => APICallError.isInstance(e) && e.statusCode === 429) ?? error.lastError;
+}
+
 export function describeError(error: unknown): string {
-  if (APICallError.isInstance(error) && error.statusCode === 429) {
+  const cause = unwrapRetryError(error);
+  if (APICallError.isInstance(cause) && cause.statusCode === 429) {
     return JSON.stringify({ code: "RATE_LIMITED" });
   }
   return JSON.stringify({ code: "UNKNOWN", message: "Something went wrong. Please try again." });

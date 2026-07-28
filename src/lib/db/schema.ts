@@ -34,6 +34,10 @@ export const chats = pgTable("chats", {
   title: text("title"),
   activeStreamId: text("active_stream_id"),
   verifiedTrackingNumbers: jsonb("verified_tracking_numbers").$type<string[]>().notNull().default([]),
+  // Set once, on the first shipment a chat ever engages with (lookup, verify, or propose — whichever
+  // comes first); every subsequent shipment-touching call is refused if it names a different tracking
+  // number. A session is about one shipment, not a general-purpose lookup tool. See decisions.md.
+  scopedTrackingNumber: text("scoped_tracking_number"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

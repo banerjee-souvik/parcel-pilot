@@ -13,6 +13,7 @@ export type ActionKind = "reschedule" | "change_address" | "update_instructions"
 export type ActionState = "proposed" | "confirmed" | "executed" | "failed" | "cancelled" | "expired";
 
 export type RefusalCode =
+  | "SHIPMENT_SESSION_LOCKED"
   | "NOT_VERIFIED"
   | "VERIFY_FAILED"
   | "SHIPMENT_NOT_FOUND"

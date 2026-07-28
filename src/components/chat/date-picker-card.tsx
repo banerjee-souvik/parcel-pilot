@@ -17,7 +17,9 @@ function dayParts(dateStr: string): { weekday: string; day: string } {
 }
 
 // Tapping a date + window composes the equivalent natural-language message rather than skipping
-// the model — see design.md: "chat is for intent, widgets are for precision," not a bypass.
+// the model — see design.md: "chat is for intent, widgets are for precision," not a bypass. Sending
+// only happens on the explicit button below, not the moment both chips are picked — a mis-tap on
+// the second chip used to fire the message immediately, with no chance to change your mind.
 export function DatePickerCard({
   dates,
   windows,
@@ -31,13 +33,15 @@ export function DatePickerCard({
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  function commit(date: string | null, window: string | null) {
-    if (!date || !window || submitted) return;
+  const canContinue = selectedDate != null && selectedWindow != null;
+
+  function handleContinue() {
+    if (!canContinue || submitted) return;
     const label = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(
-      new Date(`${date}T00:00:00`)
+      new Date(`${selectedDate}T00:00:00`)
     );
     setSubmitted(true);
-    onSelect(`${label}, ${WINDOW_LABEL[window] ?? window} please`);
+    onSelect(`${label}, ${WINDOW_LABEL[selectedWindow] ?? selectedWindow} please`);
   }
 
   return (
@@ -51,10 +55,7 @@ export function DatePickerCard({
               key={date}
               type="button"
               disabled={submitted}
-              onClick={() => {
-                setSelectedDate(date);
-                commit(date, selectedWindow);
-              }}
+              onClick={() => setSelectedDate(date)}
               className={cn(
                 "flex w-full flex-col items-center gap-0.5 rounded-xl border py-2.5 disabled:cursor-default",
                 isSelected ? "border-accent bg-accent" : "border-border bg-bg hover:bg-bg-subtle"
@@ -78,10 +79,7 @@ export function DatePickerCard({
               key={window}
               type="button"
               disabled={submitted}
-              onClick={() => {
-                setSelectedWindow(window);
-                commit(selectedDate, window);
-              }}
+              onClick={() => setSelectedWindow(window)}
               className={cn(
                 "w-full rounded-[10px] border py-2.5 text-[13px] font-medium disabled:cursor-default",
                 isSelected ? "border-accent bg-accent-soft text-accent" : "border-border bg-bg text-text-secondary hover:bg-bg-subtle"
@@ -92,6 +90,14 @@ export function DatePickerCard({
           );
         })}
       </div>
+      <button
+        type="button"
+        disabled={!canContinue || submitted}
+        onClick={handleContinue}
+        className="w-full rounded-[10px] bg-accent py-2.5 text-sm font-semibold text-white disabled:cursor-default disabled:opacity-40"
+      >
+        {submitted ? "Sent" : "Continue with this date & time"}
+      </button>
     </div>
   );
 }

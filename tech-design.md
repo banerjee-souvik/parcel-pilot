@@ -151,6 +151,7 @@ export const chats = pgTable("chats", {
   title: text("title"),
   activeStreamId: text("active_stream_id"),                     // for resumption; null when idle
   verifiedTrackingNumbers: jsonb("verified_tracking_numbers").$type<string[]>().notNull().default([]),
+  scopedTrackingNumber: text("scoped_tracking_number"),          // set once, on first shipment touched — see §7
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -251,6 +252,7 @@ Every domain service returns `Result<T>`. Tools serialize the `Refusal` verbatim
 
 ```ts
 // domain/guardrails.ts — no DB access, no I/O. Take plain objects, return Result.
+canEngageShipment(chat: {scopedTrackingNumber: string | null}, trackingNumber: string): Result<true>  // one shipment per chat, forever — checked before everything else below
 canDisclose(chat: {verified: string[]}, trackingNumber: string): Result<true>
 canReschedule(shipment, requestedDate: Date, now: Date): Result<true>
 canChangeAddress(shipment): Result<true>
@@ -258,6 +260,8 @@ canUpdateInstructions(shipment): Result<true>   // refuse only TERMINAL_STATE
 canFileClaim(shipment): Result<true>
 canExecuteProposal(action: {state, createdAt}, now: Date): Result<true>  // expires after 15 min
 ```
+
+**Session scope is orthogonal to the status matrix below and checked first.** A chat locks to whichever shipment it first engages with (`chats.scopedTrackingNumber`, set once, atomically — same conditional-update discipline as §10). Every shipment-touching call — including `lookupShipment`, which otherwise has no other guardrail — checks `canEngageShipment` before anything else; a different tracking number gets `SHIPMENT_SESSION_LOCKED` regardless of that shipment's own status. This is the one guardrail in the app that isn't about a specific shipment's state — it's about which shipment this conversation is allowed to be about at all.
 
 Rules matrix (source of truth — evals assert these):
 
@@ -276,7 +280,7 @@ Date rules for reschedule: `requestedDate` must be > today, ≤ today+14, and no
 
 ```ts
 // domain/services.ts — the ONLY layer that writes to shipments/actions. Tools and routes call these.
-lookupShipment(tx#): Result<PublicShipmentSummary>          // status+city only; NO address/eta detail — safe pre-verification
+lookupShipment(chatId, tx#): Result<PublicShipmentSummary>  // status+city only; NO address/eta detail — safe pre-verification. Still chatId-scoped: canEngageShipment fires here too.
 verifyIdentity(chatId, tx#, last4): Result<true>            // on success appends to chats.verifiedTrackingNumbers
 getShipmentDetail(chatId, tx#): Result<ShipmentDetail>      // full detail + events; guardrail canDisclose first
 getRescheduleOptions(chatId, tx#): Result<{dates: ..., windows: ...}> // next 7 valid days (skip Sundays)

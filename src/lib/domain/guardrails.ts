@@ -24,6 +24,20 @@ export function formatDateOnly(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// A chat is scoped to one shipment for its whole lifetime, set on first engagement. Checked before
+// canDisclose everywhere, since "wrong session" should never even get to "not verified yet" — a
+// user asking about shipment B in a chat already locked to A needs to start a new chat, not answer
+// a verification question for a shipment they're not going to be allowed to discuss anyway.
+export function canEngageShipment(chat: { scopedTrackingNumber: string | null }, trackingNumber: string): Result<true> {
+  if (chat.scopedTrackingNumber && chat.scopedTrackingNumber !== trackingNumber) {
+    return refuse(
+      "SHIPMENT_SESSION_LOCKED",
+      `This conversation is scoped to shipment ${chat.scopedTrackingNumber}. Please start a new chat to ask about ${trackingNumber} or any other shipment.`
+    );
+  }
+  return ok(true);
+}
+
 export function canDisclose(chat: { verifiedTrackingNumbers: string[] }, trackingNumber: string): Result<true> {
   if (!chat.verifiedTrackingNumbers.includes(trackingNumber)) {
     return refuse("NOT_VERIFIED", "I need to verify your identity before sharing shipment details. What's the last 4 digits of the phone number on this order?");

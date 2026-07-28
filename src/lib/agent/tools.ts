@@ -10,7 +10,7 @@ export function buildTools({ chatId }: { chatId: string }) {
     lookupShipment: tool({
       description: "Look up a shipment by tracking number. Returns only status and city — no address or timeline details until identity is verified.",
       inputSchema: z.object({ trackingNumber: z.string() }),
-      execute: async ({ trackingNumber }) => services.lookupShipment(trackingNumber),
+      execute: async ({ trackingNumber }) => services.lookupShipment(chatId, trackingNumber),
     }),
 
     verifyIdentity: tool({
@@ -20,7 +20,8 @@ export function buildTools({ chatId }: { chatId: string }) {
     }),
 
     getShipmentDetail: tool({
-      description: "Get full shipment detail — status, address, timeline events, exceptions. Requires prior identity verification for this tracking number.",
+      description:
+        "Get full shipment detail — status, address, timeline events, exceptions — rendered to the customer as a timeline card. Call this whenever they ask about status or timeline, even if you already showed it earlier in the conversation, rather than repeating what you remember in plain text. Requires prior identity verification for this tracking number.",
       inputSchema: z.object({ trackingNumber: z.string() }),
       execute: async ({ trackingNumber }) => {
         const result = await services.getShipmentDetail(chatId, trackingNumber);
@@ -29,7 +30,8 @@ export function buildTools({ chatId }: { chatId: string }) {
     }),
 
     getRescheduleOptions: tool({
-      description: "Get valid reschedule dates and delivery windows for a shipment. Requires prior identity verification.",
+      description:
+        "Get valid reschedule dates and delivery windows for a shipment, rendered to the customer as an interactive date/time picker. Call this every time the customer wants to reschedule — including a second or third time in the same conversation (e.g. after cancelling a previous proposal) — rather than asking them for a date in plain text. Requires prior identity verification.",
       inputSchema: z.object({ trackingNumber: z.string() }),
       execute: async ({ trackingNumber }) => {
         const result = await services.getRescheduleOptions(chatId, trackingNumber);
@@ -38,7 +40,8 @@ export function buildTools({ chatId }: { chatId: string }) {
     }),
 
     proposeReschedule: tool({
-      description: "Propose rescheduling a delivery to a new date and window. Does NOT execute the change — creates a proposal the customer must confirm in the UI.",
+      description:
+        "Propose rescheduling a delivery to a new date and window — renders to the customer as a confirmation card with Confirm/Cancel buttons. Call this as soon as you have a specific date and window, instead of describing the change in prose; the card is how they actually confirm it, not a courtesy summary. Does NOT execute the change itself.",
       inputSchema: z.object({
         trackingNumber: z.string(),
         date: z.string().describe("YYYY-MM-DD"),
@@ -51,7 +54,8 @@ export function buildTools({ chatId }: { chatId: string }) {
     }),
 
     proposeAddressChange: tool({
-      description: "Propose changing the delivery address. Does NOT execute the change — creates a proposal the customer must confirm in the UI.",
+      description:
+        "Propose changing the delivery address — renders to the customer as a confirmation card with Confirm/Cancel buttons. Call this as soon as you have the new address, instead of describing the change in prose. Does NOT execute the change itself.",
       inputSchema: z.object({ trackingNumber: z.string(), addressLine: z.string(), city: z.string() }),
       execute: async ({ trackingNumber, addressLine, city }) => {
         const result = await services.proposeAction(chatId, { kind: "change_address", trackingNumber, addressLine, city });
@@ -60,7 +64,8 @@ export function buildTools({ chatId }: { chatId: string }) {
     }),
 
     proposeInstructionsUpdate: tool({
-      description: "Propose updating delivery instructions for the courier. Does NOT execute the change — creates a proposal the customer must confirm in the UI.",
+      description:
+        "Propose updating delivery instructions for the courier — renders to the customer as a confirmation card with Confirm/Cancel buttons. Call this as soon as you have the instructions text, instead of describing the change in prose. Does NOT execute the change itself.",
       inputSchema: z.object({ trackingNumber: z.string(), instructions: z.string().max(200) }),
       execute: async ({ trackingNumber, instructions }) => {
         const result = await services.proposeAction(chatId, { kind: "update_instructions", trackingNumber, instructions });
@@ -69,7 +74,8 @@ export function buildTools({ chatId }: { chatId: string }) {
     }),
 
     proposeClaim: tool({
-      description: "Propose filing a damage or missing-item claim. Only valid once a shipment is delivered or lost. Does NOT execute — creates a proposal the customer must confirm in the UI.",
+      description:
+        "Propose filing a damage or missing-item claim — renders to the customer as a confirmation card with Confirm/Cancel buttons. Call this as soon as you have the claim type and description, instead of describing it in prose. Only valid once a shipment is delivered or lost. Does NOT execute the claim itself.",
       inputSchema: z.object({
         trackingNumber: z.string(),
         type: z.enum(["damaged", "missing"]),
