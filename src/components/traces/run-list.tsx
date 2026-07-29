@@ -3,20 +3,11 @@
 import { ChevronRight, ListFilter } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { listTraces } from "@/lib/tracing";
 
 const STATUS_DOT = { completed: "bg-success", refusal: "bg-warn", error: "bg-danger", running: "bg-accent" };
-
-function relativeTime(date: Date): string {
-  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
-}
 
 // A client component so "which row is selected" can be read from the current URL via usePathname —
 // a shared layout.tsx can't receive params for a nested [id] segment below its own position, so
@@ -50,7 +41,7 @@ export function RunList({ runs }: { runs: Awaited<ReturnType<typeof listTraces>>
                 {run.chatTitle ?? run.chatId}
               </span>
               <span className="truncate text-xs text-text-secondary">
-                {relativeTime(run.createdAt)} · {run.stepCount} steps · {((run.totalTokens ?? 0) / 1000).toFixed(1)}k tok
+                {formatRelativeTime(run.createdAt)} · {run.stepCount} steps · {((run.totalTokens ?? 0) / 1000).toFixed(1)}k tok
               </span>
             </div>
             <ChevronRight className="h-[15px] w-[15px] shrink-0 text-text-secondary" />

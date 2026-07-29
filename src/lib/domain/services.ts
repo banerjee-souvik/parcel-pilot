@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { UIMessage } from "ai";
 import { db } from "../db";
@@ -433,6 +433,41 @@ async function applyAction(payload: ProposePayload, tx: Tx): Promise<Receipt> {
       };
     }
   }
+}
+
+// Powers the client-side "previous chats" list (chat-history.ts tracks ids in localStorage — this
+// app has no auth, so there's no server-side notion of "your" chats). Ids the DB no longer has a
+// row for (a dev reseed, e.g.) are silently dropped rather than erroring — the client's local list
+// isn't a source of truth, just a set of ids worth checking.
+export async function loadChatSummaries(
+  chatIds: string[]
+): Promise<{ id: string; scopedTrackingNumber: string | null; lastMessageAt: Date; preview: string }[]> {
+  if (chatIds.length === 0) return [];
+
+  const chatRows = await db
+    .select({ id: chats.id, scopedTrackingNumber: chats.scopedTrackingNumber })
+    .from(chats)
+    .where(inArray(chats.id, chatIds));
+  if (chatRows.length === 0) return [];
+
+  const messageRows = await db
+    .select({ chatId: messages.chatId, parts: messages.parts, createdAt: messages.createdAt })
+    .from(messages)
+    .where(inArray(messages.chatId, chatRows.map((c) => c.id)))
+    .orderBy(desc(messages.createdAt));
+
+  const latestByChatId = new Map<string, { lastMessageAt: Date; preview: string }>();
+  for (const row of messageRows) {
+    if (latestByChatId.has(row.chatId)) continue;
+    const parts = row.parts as { type: string; text?: string }[];
+    const text = parts.find((p) => p.type === "text" && p.text)?.text ?? "";
+    latestByChatId.set(row.chatId, { lastMessageAt: row.createdAt, preview: text.slice(0, 140) });
+  }
+
+  return chatRows
+    .filter((c) => latestByChatId.has(c.id))
+    .map((c) => ({ id: c.id, scopedTrackingNumber: c.scopedTrackingNumber, ...latestByChatId.get(c.id)! }))
+    .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
 }
 
 export async function cancelProposal(proposalId: string, chatId: string): Promise<Result<true>> {

@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { recordChatVisit } from "@/lib/chat-history";
 import { ChatHeader } from "./chat-header";
 import { FormattedText } from "./formatted-text";
 import { MessageBubble } from "./message-bubble";
@@ -56,6 +57,7 @@ export function ChatClient({
   function send(text: string) {
     if (!text.trim()) return;
     setPillDismissed(true);
+    recordChatVisit(chatId);
     sendMessage({ text });
     setInput("");
   }
